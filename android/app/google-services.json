@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "1025808601181",
+    "firebase_url": "https://exam-duty-9232f-default-rtdb.firebaseio.com",
+    "project_id": "exam-duty-9232f",
+    "storage_bucket": "exam-duty-9232f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1025808601181:android:17974bd98b12364b14bdb4",
+        "android_client_info": {
+          "package_name": "com.rsservices.invigilator"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC4F27CKqQt6CWYTDumYnFejSnQXnif8JY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
