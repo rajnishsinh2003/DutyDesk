@@ -9,12 +9,18 @@ class ExamCenter {
   final String name;
   final String location;
   final int capacity;
+  final double? latitude;
+  final double? longitude;
+  final int allowedRadiusMeters;
 
   ExamCenter({
     required this.id,
     required this.name,
     required this.location,
     required this.capacity,
+    this.latitude,
+    this.longitude,
+    this.allowedRadiusMeters = 200,
   });
 
   ExamCenter copyWith({
@@ -22,12 +28,18 @@ class ExamCenter {
     String? name,
     String? location,
     int? capacity,
+    double? latitude,
+    double? longitude,
+    int? allowedRadiusMeters,
   }) {
     return ExamCenter(
       id: id ?? this.id,
       name: name ?? this.name,
       location: location ?? this.location,
       capacity: capacity ?? this.capacity,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      allowedRadiusMeters: allowedRadiusMeters ?? this.allowedRadiusMeters,
     );
   }
 
@@ -36,6 +48,9 @@ class ExamCenter {
       'name': name,
       'location': location,
       'capacity': capacity,
+      'latitude': latitude,
+      'longitude': longitude,
+      'allowedRadiusMeters': allowedRadiusMeters,
     };
   }
 }
@@ -61,6 +76,9 @@ class CenterNotifier extends Notifier<List<ExamCenter>> {
           name: data['name'] ?? '',
           location: data['location'] ?? '',
           capacity: data['capacity'] ?? 0,
+          latitude: (data['latitude'] as num?)?.toDouble(),
+          longitude: (data['longitude'] as num?)?.toDouble(),
+          allowedRadiusMeters: (data['allowedRadiusMeters'] as num?)?.toInt() ?? 200,
         );
       }).toList();
     }, onError: (error) {
@@ -74,7 +92,14 @@ class CenterNotifier extends Notifier<List<ExamCenter>> {
     return [];
   }
 
-  Future<void> addCenter(String name, String location, int capacity) async {
+  Future<void> addCenter(
+    String name,
+    String location,
+    int capacity, {
+    double? latitude,
+    double? longitude,
+    int allowedRadiusMeters = 200,
+  }) async {
     if (Firebase.apps.isEmpty) return;
 
     try {
@@ -82,13 +107,24 @@ class CenterNotifier extends Notifier<List<ExamCenter>> {
         'name': name,
         'location': location,
         'capacity': capacity,
+        'latitude': latitude,
+        'longitude': longitude,
+        'allowedRadiusMeters': allowedRadiusMeters,
       });
     } catch (e) {
-      // Handle error
+      log('Error adding center: $e');
     }
   }
 
-  Future<void> updateCenter(String id, String name, String location, int capacity) async {
+  Future<void> updateCenter(
+    String id,
+    String name,
+    String location,
+    int capacity, {
+    double? latitude,
+    double? longitude,
+    int allowedRadiusMeters = 200,
+  }) async {
     if (Firebase.apps.isEmpty) return;
 
     try {
@@ -96,9 +132,12 @@ class CenterNotifier extends Notifier<List<ExamCenter>> {
         'name': name,
         'location': location,
         'capacity': capacity,
+        'latitude': latitude,
+        'longitude': longitude,
+        'allowedRadiusMeters': allowedRadiusMeters,
       });
     } catch (e) {
-      // Handle error
+      log('Error updating center: $e');
     }
   }
 
@@ -108,7 +147,7 @@ class CenterNotifier extends Notifier<List<ExamCenter>> {
     try {
       await FirebaseFirestore.instance.collection('centers').doc(id).delete();
     } catch (e) {
-      // Handle error
+      log('Error deleting center: $e');
     }
   }
 }

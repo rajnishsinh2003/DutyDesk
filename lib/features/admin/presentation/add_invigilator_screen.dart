@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:duty_desk/l10n/app_localizations.dart';
 import '../providers/invigilator_provider.dart';
 
 class AddInvigilatorScreen extends ConsumerStatefulWidget {
@@ -42,6 +43,7 @@ class _AddInvigilatorScreenState extends ConsumerState<AddInvigilatorScreen> {
   }
 
   void _saveInvigilator() {
+    final s = S.of(context)!;
     if (_formKey.currentState!.validate()) {
       final name = _nameController.text.trim();
       final mobile = _mobileController.text.trim();
@@ -56,7 +58,7 @@ class _AddInvigilatorScreenState extends ConsumerState<AddInvigilatorScreen> {
       }
       
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.existingInvigilator == null ? 'Invigilator Added Successfully!' : 'Invigilator Updated!')),
+        SnackBar(content: Text(widget.existingInvigilator == null ? s.invigilatorAddedSuccess : s.invigilatorUpdated)),
       );
       context.pop();
     }
@@ -65,10 +67,11 @@ class _AddInvigilatorScreenState extends ConsumerState<AddInvigilatorScreen> {
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.existingInvigilator != null;
+    final s = S.of(context)!;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isEditing ? 'Edit Invigilator' : 'Add Invigilator'),
+        title: Text(isEditing ? s.editInvigilator : s.addInvigilator),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -78,50 +81,50 @@ class _AddInvigilatorScreenState extends ConsumerState<AddInvigilatorScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Personal Details',
+                s.personalDetails,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Full Name', prefixIcon: Icon(Icons.person)),
-                validator: (val) => val == null || val.isEmpty ? 'Required' : null,
+                decoration: InputDecoration(labelText: s.fullName, prefixIcon: const Icon(Icons.person)),
+                validator: (val) => val == null || val.isEmpty ? s.required : null,
               ),
               const SizedBox(height: 32),
               Text(
-                'Contact & Login Credentials',
+                s.contactAndCredentials,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _mobileController,
-                decoration: const InputDecoration(labelText: 'Mobile Number (Username)', prefixIcon: Icon(Icons.phone)),
+                decoration: InputDecoration(labelText: s.mobileNumberUsername, prefixIcon: const Icon(Icons.phone)),
                 keyboardType: TextInputType.phone,
-                validator: (val) => val == null || val.isEmpty ? 'Required' : null,
+                validator: (val) => val == null || val.isEmpty ? s.required : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _resourceIdController,
-                decoration: const InputDecoration(labelText: 'Resource ID (Password)', prefixIcon: Icon(Icons.badge)),
-                validator: (val) => val == null || val.isEmpty ? 'Required' : null,
+                decoration: InputDecoration(labelText: s.resourceIdPassword, prefixIcon: const Icon(Icons.badge)),
+                validator: (val) => val == null || val.isEmpty ? s.required : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email Address', prefixIcon: Icon(Icons.email)),
+                decoration: InputDecoration(labelText: s.emailAddress, prefixIcon: const Icon(Icons.email)),
                 keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _addressController,
-                decoration: const InputDecoration(labelText: 'Address', prefixIcon: Icon(Icons.home)),
+                decoration: InputDecoration(labelText: s.address, prefixIcon: const Icon(Icons.home)),
                 maxLines: 3,
               ),
               const SizedBox(height: 32),
               ElevatedButton(
                 onPressed: _saveInvigilator,
                 style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                child: Text(isEditing ? 'Update Invigilator' : 'Save Invigilator', style: const TextStyle(fontSize: 16)),
+                child: Text(isEditing ? s.updateInvigilator : s.saveInvigilator, style: const TextStyle(fontSize: 16)),
               ),
             ],
           ),

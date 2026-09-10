@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:duty_desk/l10n/app_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
+import 'core/providers/language_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,17 +41,22 @@ void main() async {
   runApp(const ProviderScope(child: DutyDeskApp()));
 }
 
-class DutyDeskApp extends StatelessWidget {
+class DutyDeskApp extends ConsumerWidget {
   const DutyDeskApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentLocale = ref.watch(languageProvider);
+
     return MaterialApp.router(
       title: 'DutyDesk - Exam Invigilation Management',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
       routerConfig: appRouter,
+      locale: currentLocale,
+      localizationsDelegates: S.localizationsDelegates,
+      supportedLocales: S.supportedLocales,
       debugShowCheckedModeBanner: false,
     );
   }

@@ -1,0 +1,557 @@
+{
+  "@@locale": "en",
+
+  "appName": "DutyDesk",
+  "appSubtitle": "Exam Invigilation & Staff Management System",
+  "examInvigilationManagement": "Exam Invigilation Management",
+
+  "login": "Login",
+  "logout": "Logout",
+  "staffInvigilator": "Staff / Invigilator",
+  "administrator": "Administrator",
+  "adminUsernameOrEmail": "Admin Username or Email",
+  "registeredMobileNumber": "Registered Mobile Number",
+  "hintAdminEmail": "e.g. admin@dutydesk.com",
+  "hintMobileNumber": "e.g. 9876543210",
+  "password": "Password",
+  "resourceIdPassword": "Resource ID (Password)",
+  "hintAdminPassword": "Enter admin password",
+  "hintResourceId": "e.g. RES101 / Staff ID",
+  "signInAsAdmin": "Sign In as Admin",
+  "signInAsStaff": "Sign In as Staff",
+  "adminLoginHint": "Admin: Use your administrative email & master password.",
+  "staffLoginHint": "Staff: Use your registered Mobile Number and assigned Resource ID.",
+  "pleaseEnterAdminCredentials": "Please enter Admin credentials",
+  "pleaseEnterMobileAndResourceId": "Please enter Mobile Number and Resource ID",
+  "invalidMobileOrResourceId": "Invalid Mobile Number or Resource ID",
+  "firebaseNotInitialized": "Firebase is not initialized. Please check internet connection or configuration.",
+  "authenticationFailed": "Authentication failed",
+  "confirmLogout": "Confirm Logout",
+  "confirmLogoutMessage": "Are you sure you want to logout?",
+  "cancel": "Cancel",
+
+  "dashboard": "Dashboard",
+  "adminDashboard": "Admin Dashboard",
+  "totalStaff": "Total Staff",
+  "totalCenters": "Total Centers",
+  "activeSessions": "Active Sessions",
+  "todaysDuties": "Today's Duties",
+  "totalRemuneration": "Total Remuneration",
+  "liveMonitoring": "Live Monitoring",
+  "arrivalStatus": "Arrival Status",
+  "excellent": "Excellent",
+  "good": "Good",
+  "onTime": "On Time",
+  "slightlyLate": "Slightly Late",
+  "needsImprovement": "Needs Improvement",
+  "quickActions": "Quick Actions",
+  "manageStaff": "Manage Staff",
+  "manageCenters": "Manage Centers",
+  "allocateDuty": "Allocate Duty",
+  "reports": "Reports",
+  "settings": "Settings",
+  "masterData": "Master Data",
+  "globalSearch": "Global Search",
+  "liveControlRoom": "Live Control Room",
+  "payrollSalary": "Payroll & Salary",
+  "todaysExams": "Today's Exams",
+  "noExamsToday": "No exams scheduled today",
+  "viewAll": "View All",
+  "viewDetails": "View Details",
+  "recentAllocations": "Recent Allocations",
+  "noAllocations": "No allocations found",
+  "exportAllAllocations": "Export All Allocations",
+  "exportingRecords": "Exporting {count} allocation records.",
+  "@exportingRecords": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "exportAsPdf": "Export as PDF",
+  "exportAsExcel": "Export as Excel",
+  "pdfError": "PDF Error: {error}",
+  "@pdfError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "excelError": "Excel Error: {error}",
+  "@excelError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "allAllocations": "All Allocations",
+  "dashboardFiltered": "Dashboard Filtered",
+
+  "staff": "Staff",
+  "addStaff": "Add Staff",
+  "editStaff": "Edit Staff",
+  "deleteStaff": "Delete Staff",
+  "search": "Search",
+  "searchStaff": "Search staff...",
+  "fullName": "Full Name",
+  "mobileNumber": "Mobile Number",
+  "mobileNumberUsername": "Mobile Number (Username)",
+  "resourceId": "Resource ID",
+  "emailAddress": "Email Address",
+  "address": "Address",
+  "active": "Active",
+  "blocked": "Blocked",
+  "available": "Available",
+  "unavailable": "Unavailable",
+  "leave": "Leave",
+  "save": "Save",
+  "update": "Update",
+  "confirm": "Confirm",
+  "delete": "Delete",
+  "edit": "Edit",
+  "add": "Add",
+  "personalDetails": "Personal Details",
+  "contactAndCredentials": "Contact & Login Credentials",
+  "addInvigilator": "Add Invigilator",
+  "editInvigilator": "Edit Invigilator",
+  "saveInvigilator": "Save Invigilator",
+  "updateInvigilator": "Update Invigilator",
+  "invigilatorAddedSuccess": "Invigilator Added Successfully!",
+  "invigilatorUpdated": "Invigilator Updated!",
+  "manageInvigilators": "Manage Invigilators",
+  "noInvigilatorsFound": "No invigilators found",
+  "totalInvigilators": "Total Invigilators",
+  "deleteInvigilator": "Delete Invigilator",
+  "deleteInvigilatorConfirm": "Are you sure you want to delete {name}?",
+  "@deleteInvigilatorConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "invigilatorProfile": "Invigilator Profile",
+  "dutyHistory": "Duty History",
+  "performance": "Performance",
+  "totalDutiesAssigned": "Total Duties Assigned",
+  "dutiesCompleted": "Duties Completed",
+  "dutiesPending": "Duties Pending",
+  "attendanceRate": "Attendance Rate",
+  "availabilityCalendar": "Availability Calendar",
+  "markAvailable": "Mark Available",
+  "markUnavailable": "Mark Unavailable",
+  "markLeave": "Mark Leave",
+  "noDataAvailable": "No data available",
+
+  "exams": "Exams",
+  "registeredExams": "Registered Exams",
+  "registerNewExam": "Register New Exam",
+  "registerExam": "Register Exam",
+  "examName": "Exam Name",
+  "examDate": "Exam Date",
+  "examCenter": "Exam Center",
+  "session": "Session",
+  "newExam": "New Exam",
+  "noRegisteredExams": "No Registered Exams found. Create one to assign duties.",
+  "selectCenter": "Select Center",
+  "required": "Required",
+
+  "selectDate": "Select Date",
+  "selectShift": "Select Shift",
+  "shift1": "Shift 1",
+  "shift2": "Shift 2",
+  "shift3": "Shift 3",
+  "selectInvigilators": "Select Invigilators",
+  "selectedInvigilators": "Selected Invigilators",
+  "assign": "Assign",
+  "assignDuty": "Assign Duty",
+  "conflictDetected": "Conflict Detected",
+  "overrideAction": "Override",
+  "recommendedStaff": "Recommended Staff",
+  "reassign": "Reassign",
+  "swapDuty": "Swap Duty",
+  "replacement": "Replacement",
+  "confirmAssignment": "Confirm Assignment",
+  "dutyAllocation": "Duty Allocation",
+  "shiftRemuneration": "Shift Remuneration",
+  "shift1Amount": "Shift 1 — ₹{amount}",
+  "@shift1Amount": {
+    "placeholders": {
+      "amount": {
+        "type": "int"
+      }
+    }
+  },
+  "shift2Amount": "Shift 2 — ₹{amount}",
+  "@shift2Amount": {
+    "placeholders": {
+      "amount": {
+        "type": "int"
+      }
+    }
+  },
+  "shift3Amount": "Shift 3 — ₹{amount}",
+  "@shift3Amount": {
+    "placeholders": {
+      "amount": {
+        "type": "int"
+      }
+    }
+  },
+
+  "myDuties": "My Duties",
+  "myProfile": "My Profile",
+  "availability": "Availability",
+  "calendar": "Calendar",
+  "assignedDuty": "Assigned Duty",
+  "accept": "Accept",
+  "reject": "Reject",
+  "dutyDetails": "Duty Details",
+  "reportingTime": "Reporting Time",
+  "remuneration": "Remuneration",
+  "invigilatorDashboard": "Invigilator Dashboard",
+  "noDutiesAssigned": "No duties assigned yet",
+  "upcomingDuties": "Upcoming Duties",
+  "pastDuties": "Past Duties",
+  "dutyAccepted": "Duty accepted",
+  "dutyRejected": "Duty rejected",
+  "dutySwapped": "Duty swapped successfully",
+  "currentDuty": "Current Duty",
+
+  "reached": "REACHED",
+  "arrival": "Arrival",
+  "arrivalTime": "Arrival Time",
+  "location": "Location",
+  "gps": "GPS",
+  "locationVerified": "Location Verified",
+  "outsideCenter": "Outside Center",
+  "distanceFromCenter": "Distance from Center",
+  "arrivalRecorded": "Arrival Recorded",
+  "waitingForInternet": "Waiting for Internet",
+  "arrivalSyncedSuccessfully": "Arrival Synced Successfully",
+  "youReachedOnTime": "You reached on time.",
+  "youReachedSlightlyLate": "You reached slightly late.",
+  "reachInProperTime": "Reach in proper time.",
+  "geofenceVerified": "✓ Geofence Verified",
+  "outsideGeofence": "⚠ Outside Geofence",
+  "tryAgain": "Try Again",
+  "requestManualVerification": "Request Manual Verification",
+  "outsideGeofenceWarning": "You appear to be outside the exam center area.",
+  "distanceMeters": "{distance}m from center",
+  "@distanceMeters": {
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      }
+    }
+  },
+
+  "dateRange": "Date Range",
+  "status": "Status",
+  "accepted": "Accepted",
+  "pending": "Pending",
+  "rejected": "Rejected",
+  "completed": "Completed",
+  "totalDuties": "Total Duties",
+  "exportPdf": "Export PDF",
+  "exportExcel": "Export Excel",
+  "download": "Download",
+  "generateReport": "Generate Report",
+  "noReportsFound": "No reports found",
+  "reportGenerated": "Report generated successfully",
+  "center": "Center",
+  "shift": "Shift",
+  "all": "All",
+  "filterByStatus": "Filter by Status",
+  "filterByCenter": "Filter by Center",
+  "filterByShift": "Filter by Shift",
+
+  "language": "Language",
+  "english": "English",
+  "hindi": "हिन्दी",
+  "gujarati": "ગુજરાતી",
+  "languageChangedSuccess": "Language changed successfully",
+  "selectLanguage": "Select Language",
+  "lunchProvision": "Lunch Provision",
+  "reportingTimeLabel": "Reporting Time",
+  "arrivalThreshold": "Arrival Threshold",
+  "voiceFeedback": "Voice Feedback",
+  "notifications": "Notifications",
+  "darkMode": "Dark Mode",
+  "lightMode": "Light Mode",
+  "saveChanges": "Save Changes",
+  "settingsSaved": "Settings saved successfully",
+  "dutySettings": "Duty Settings",
+
+  "centers": "Centers",
+  "addCenter": "Add Center",
+  "editCenter": "Edit Center",
+  "deleteCenter": "Delete Center",
+  "centerName": "Center Name",
+  "locationCity": "Location / City",
+  "capacity": "Capacity",
+  "saveCenter": "Save Center",
+  "updateCenter": "Update Center",
+  "centerAddedSuccess": "Center Added Successfully!",
+  "centerUpdated": "Center Updated!",
+  "noCentersFound": "No centers found. Add one!",
+  "deleteCenterConfirm": "Are you sure you want to delete {name}?",
+  "@deleteCenterConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "geofenceGpsVerification": "Geofence & GPS Verification",
+  "useCurrentGps": "Use Current GPS",
+  "latitude": "Latitude",
+  "longitude": "Longitude",
+  "allowedArrivalRadius": "Allowed Arrival Radius (Meters)",
+  "geofenceHelperText": "Staff within this radius are marked \"REACHED & VERIFIED\"",
+  "capturedGpsLocation": "✓ Captured current GPS location!",
+  "couldNotAcquireGps": "Could not acquire GPS location",
+  "noGpsGeofenceConfigured": "No GPS Geofence configured",
+
+  "reachedCount": "Reached",
+  "pendingCount": "Pending",
+  "lateCount": "Late",
+  "absentCount": "Absent",
+  "centerHealth": "Center Health",
+  "shortage": "Shortage",
+  "replacementRequired": "Replacement Required",
+  "emergencyReplacement": "Emergency Replacement",
+  "todaysDutiesCount": "Today's Duties",
+  "liveExamControlRoom": "Live Exam-Day Control Room",
+  "liveStats": "Live Stats",
+  "outsideGeofenceFilter": "Outside Geofence",
+  "callStaff": "Call Staff",
+  "reassignDuty": "Reassign Duty",
+
+  "notificationCenter": "Notification Center",
+  "unread": "Unread",
+  "dutyUpdates": "Duty Updates",
+  "alerts": "Alerts",
+  "markAllRead": "Mark All Read",
+  "noNotifications": "No notifications",
+  "markAsRead": "Mark as Read",
+  "deleteNotification": "Delete",
+  "minutesAgo": "{minutes}m ago",
+  "@minutesAgo": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "hoursAgo": "{hours}h ago",
+  "@hoursAgo": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "justNow": "Just now",
+
+  "payroll": "Payroll",
+  "payrollRemuneration": "Payroll & Remuneration",
+  "totalRemunerationAmount": "Total Remuneration",
+  "approved": "Approved",
+  "paid": "Paid",
+  "paymentPending": "Payment Pending",
+  "paymentReference": "Payment Reference",
+  "paymentRemarks": "Payment Remarks",
+  "markPaid": "Mark Paid",
+  "bulkPay": "Bulk Pay",
+  "exportStatement": "Export Statement",
+  "paymentStatusUpdated": "Payment status updated",
+  "staffSummary": "Staff Summary",
+  "detailedPayments": "Detailed Payments",
+  "monthSelector": "Month",
+
+  "masterDataManagement": "Master Data Management",
+  "selectModuleDescription": "Select a module below to view, add, edit, or manage its active status.",
+  "searchModules": "Search modules...",
+  "esNames": "ES Names",
+  "examNames": "Exam Names",
+  "securityGuardNames": "Security Guard Names",
+  "jammerNames": "Jammer Names",
+  "users": "Users",
+  "records": "{count} Records",
+  "@records": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "addNew": "Add New",
+  "noRecords": "No records found",
+  "itemAdded": "Item added successfully",
+  "itemUpdated": "Item updated successfully",
+  "itemDeleted": "Item deleted successfully",
+  "enterValue": "Enter value",
+  "name": "Name",
+  "value": "Value",
+
+  "dutyAssignedSuccess": "Duty assigned successfully",
+  "dutyAllocatedSuccess": "Duty allocated successfully",
+  "errorOccurred": "An error occurred",
+  "success": "Success",
+  "error": "Error",
+  "loading": "Loading...",
+  "noDataFound": "No data found",
+  "retry": "Retry",
+  "close": "Close",
+  "ok": "OK",
+  "yes": "Yes",
+  "no": "No",
+  "back": "Back",
+  "next": "Next",
+  "done": "Done",
+  "submit": "Submit",
+  "clear": "Clear",
+  "reset": "Reset",
+  "refresh": "Refresh",
+  "more": "More",
+  "less": "Less",
+  "seeAll": "See All",
+
+  "ttsExcellent": "Excellent. You reached on time.",
+  "ttsGood": "Good. You reached slightly late.",
+  "ttsNeedsImprovement": "Needs improvement. Please reach in proper time.",
+  "welcomeMessage": "Welcome!",
+
+  "swapRequest": "Swap Request",
+  "swapRequestSent": "Swap request sent successfully",
+  "swapApproved": "Swap approved",
+  "swapRejected": "Swap rejected",
+  "requestSwap": "Request Swap",
+  "swapWith": "Swap With",
+  "reason": "Reason",
+
+  "sendReminder": "Send Reminder",
+  "reminderSent": "Reminder sent successfully",
+  "manualReminder": "Manual Reminder",
+
+  "profile": "Profile",
+  "personalInfo": "Personal Information",
+  "contactInfo": "Contact Information",
+  "dutyStatistics": "Duty Statistics",
+  "mockDutyCount": "Mock Duty Count",
+
+  "email": "Email",
+  "phone": "Phone",
+  "mobile": "Mobile",
+
+  "today": "Today",
+  "yesterday": "Yesterday",
+  "tomorrow": "Tomorrow",
+  "thisWeek": "This Week",
+  "thisMonth": "This Month",
+
+  "from": "From",
+  "to": "To",
+  "date": "Date",
+  "time": "Time",
+  "startDate": "Start Date",
+  "endDate": "End Date",
+
+  "staffReachedCount": "{reached} / {total} Reached",
+  "@staffReachedCount": {
+    "placeholders": {
+      "reached": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "pendingDutiesCount": "You have {count} pending duties.",
+  "@pendingDutiesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "confirmDelete": "Confirm Delete",
+  "deleteWarning": "This action cannot be undone.",
+  "operationSuccess": "Operation completed successfully",
+  "operationFailed": "Operation failed",
+
+  "noInternetConnection": "No internet connection",
+  "checkInternetConnection": "Please check your internet connection and try again.",
+
+  "capacityLabel": "Capacity: {capacity}",
+  "@capacityLabel": {
+    "placeholders": {
+      "capacity": {
+        "type": "int"
+      }
+    }
+  },
+
+  "selectedCount": "{count} selected",
+  "@selectedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "remunerationAmount": "₹{amount}",
+  "@remunerationAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+
+  "dutyAllocations": "Duty Allocations",
+  "examSessions": "Exam Sessions",
+  "sendEmailReport": "Send Email Report",
+  "emailSentSuccess": "Email sent successfully",
+  "emailSendFailed": "Failed to send email",
+  "selectAll": "Select All",
+  "deselectAll": "Deselect All",
+  "selected": "Selected",
+  "notSelected": "Not Selected",
+  "chooseDate": "Choose Date",
+  "chooseDateRange": "Choose Date Range",
+  "noResultsFound": "No results found",
+  "searchResults": "Search Results",
+  "typeToSearch": "Type to search...",
+  "staffDetails": "Staff Details",
+  "centerDetails": "Center Details",
+  "dutyInfo": "Duty Info",
+  "examInfo": "Exam Info",
+  "maintenanceData": "Maintenance Data",
+  "viewProfile": "View Profile",
+  "contactStaff": "Contact Staff",
+  "actions": "Actions",
+  "noActionsAvailable": "No actions available",
+  "geofenceVerification": "Geofence & GPS Verification",
+  "welcome": "Welcome",
+  "statsAtGlance": "Statistics at a Glance",
+  "invigilators": "Invigilators",
+  "swapRequests": "Swap Requests",
+  "approve": "Approve",
+  "late": "Late",
+  "invigilatorDirectory": "Invigilator Directory",
+  "maintainData": "Maintain Data",
+  "securityGuardRecords": "Security Guard Records",
+  "home": "Home",
+  "clickDateToToggle": "Tap any date to mark or unmark your leave/unavailability.",
+  "inactive": "Inactive",
+  "invigilator": "Invigilator",
+  "labStaff": "Lab Staff"
+}

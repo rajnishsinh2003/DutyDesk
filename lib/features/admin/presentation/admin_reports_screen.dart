@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import 'package:duty_desk/l10n/app_localizations.dart';
 import '../providers/invigilator_provider.dart';
 import '../../invigilator/providers/duty_provider.dart';
 import '../services/report_service.dart';
+import '../../../core/services/location_service.dart';
 
 class AdminReportsScreen extends ConsumerStatefulWidget {
   final String? initialStatusFilter;
@@ -19,8 +22,8 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
   String _searchQuery = '';
   String _shiftFilter = 'all';
   String _centerFilter = 'all';
-  String _resourceIdQuery = '';
-  String? _dateFilter; // 'YYYY-MM-DD'
+  String _reachedFilter = 'all'; // 'all', 'reached', 'not_reached'
+  DateTimeRange? _selectedDateRange;
 
   bool _isExporting = false;
 
@@ -32,52 +35,22 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
     }
   }
 
-  String _getRoleDisplayName(String roleCode) {
-    switch (roleCode.toLowerCase()) {
-      case 'inv': return 'Invigilator';
-      case 'ls': return 'Lab Staff';
-      case 'mtoe': return 'MTOE';
-      default: return roleCode.toUpperCase();
-    }
-  }
-
-  void _confirmDelete(BuildContext context, WidgetRef ref, String id, String examName) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Allocation'),
-        content: Text('Delete duty allocation for "$examName"?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            onPressed: () {
-              ref.read(dutyProvider.notifier).deleteDuty(id);
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Duty deleted.'), backgroundColor: Colors.green),
-              );
-            },
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _buildFilterDescription() {
+  String _buildFilterDescription(S s) {
     final parts = <String>[];
-    if (_statusFilter != 'all') parts.add('Status: ${_statusFilter.toUpperCase()}');
-    if (_shiftFilter != 'all') parts.add('Shift: $_shiftFilter');
-    if (_centerFilter != 'all') parts.add('Center: $_centerFilter');
-    if (_dateFilter != null) parts.add('Date: $_dateFilter');
-    if (_resourceIdQuery.isNotEmpty) parts.add('Resource ID: $_resourceIdQuery');
-    if (_searchQuery.isNotEmpty) parts.add('Search: "$_searchQuery"');
-    return parts.isEmpty ? 'All Duties' : parts.join(' | ');
+    if (_statusFilter != 'all') parts.add('${s.status}: ${_statusFilter.toUpperCase()}');
+    if (_shiftFilter != 'all') parts.add('${s.shift}: $_shiftFilter');
+    if (_centerFilter != 'all') parts.add('${s.center}: $_centerFilter');
+    if (_reachedFilter != 'all') parts.add('${s.arrival}: ${_reachedFilter.toUpperCase()}');
+    if (_selectedDateRange != null) {
+      parts.add('${s.date}: ${DateFormat('dd/MM/yy').format(_selectedDateRange!.start)} - ${DateFormat('dd/MM/yy').format(_selectedDateRange!.end)}');
+    }
+    if (_searchQuery.isNotEmpty) parts.add('${s.search}: "$_searchQuery"');
+    return parts.isEmpty ? s.allAllocations : parts.join(' | ');
   }
 
-  void _showExportModal(List filteredDuties, List invigilators) {
-    final filterDesc = _buildFilterDescription();
+  void _showExportModal(List<ExamDuty> filteredDuties, List<Invigilator> invigilators) {
+    final s = S.of(context)!;
+    final filterDesc = _buildFilterDescription(s);
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
@@ -87,17 +60,16 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Export Report', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            Text(s.generateReport, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Text(
-              'Exporting ${filteredDuties.length} record(s)\nFilter: $filterDesc',
+              '${s.exportingRecords(filteredDuties.length)}\nFilter: $filterDesc',
               style: TextStyle(fontSize: 13, color: Colors.grey[600]),
             ),
             const SizedBox(height: 20),
-            // PDF Button
             ElevatedButton.icon(
               icon: const Icon(Icons.picture_as_pdf_outlined),
-              label: const Text('Export as PDF'),
+              label: Text(s.exportPdf),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFB91C1C),
                 foregroundColor: Colors.white,
@@ -110,13 +82,13 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
                 final messenger = ScaffoldMessenger.of(context);
                 try {
                   await ReportService.exportPdf(
-                    duties: filteredDuties.cast(),
-                    invigilators: invigilators.cast(),
+                    duties: filteredDuties,
+                    invigilators: invigilators,
                     filterDescription: filterDesc,
                   );
                 } catch (e) {
                   messenger.showSnackBar(
-                    SnackBar(content: Text('PDF Error: $e'), backgroundColor: Colors.red),
+                    SnackBar(content: Text(s.pdfError(e.toString())), backgroundColor: Colors.red),
                   );
                 } finally {
                   if (mounted) setState(() => _isExporting = false);
@@ -124,10 +96,9 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
               },
             ),
             const SizedBox(height: 12),
-            // Excel Button
             ElevatedButton.icon(
               icon: const Icon(Icons.table_chart_outlined),
-              label: const Text('Export as Excel'),
+              label: Text(s.exportExcel),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF15803D),
                 foregroundColor: Colors.white,
@@ -140,13 +111,13 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
                 final messenger = ScaffoldMessenger.of(context);
                 try {
                   await ReportService.exportExcel(
-                    duties: filteredDuties.cast(),
-                    invigilators: invigilators.cast(),
+                    duties: filteredDuties,
+                    invigilators: invigilators,
                     filterDescription: filterDesc,
                   );
                 } catch (e) {
                   messenger.showSnackBar(
-                    SnackBar(content: Text('Excel Error: $e'), backgroundColor: Colors.red),
+                    SnackBar(content: Text(s.excelError(e.toString())), backgroundColor: Colors.red),
                   );
                 } finally {
                   if (mounted) setState(() => _isExporting = false);
@@ -160,390 +131,372 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
     );
   }
 
-  void _showAdvancedFilters(List<String> centerNames) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) {
-          return Padding(
-            padding: EdgeInsets.only(
-              left: 20, right: 20, top: 24,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Advanced Filters', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _shiftFilter = 'all';
-                          _centerFilter = 'all';
-                          _dateFilter = null;
-                          _resourceIdQuery = '';
-                        });
-                        Navigator.pop(context);
-                      },
-                      child: const Text('Clear All'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // Date picker
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.calendar_today, color: Color(0xFF2563EB)),
-                  title: Text(_dateFilter ?? 'Filter by Date', style: TextStyle(color: _dateFilter != null ? Colors.black : Colors.grey)),
-                  trailing: _dateFilter != null
-                      ? IconButton(icon: const Icon(Icons.clear), onPressed: () { setModalState(() {}); setState(() => _dateFilter = null); })
-                      : const Icon(Icons.chevron_right),
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: DateTime.now(),
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime(2030),
-                    );
-                    if (picked != null) {
-                      final formatted = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-                      setModalState(() {});
-                      setState(() => _dateFilter = formatted);
-                    }
-                  },
-                ),
-                const Divider(),
-
-                // Center dropdown
-                DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(
-                    labelText: 'Filter by Center',
-                    prefixIcon: Icon(Icons.business),
-                    border: OutlineInputBorder(),
-                  ),
-                  initialValue: _centerFilter,
-                  items: [
-                    const DropdownMenuItem(value: 'all', child: Text('All Centers')),
-                    ...centerNames.map((c) => DropdownMenuItem(value: c, child: Text(c))),
-                  ],
-                  onChanged: (val) {
-                    setModalState(() {});
-                    setState(() => _centerFilter = val!);
-                  },
-                ),
-                const SizedBox(height: 12),
-
-                // Shift dropdown
-                DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(
-                    labelText: 'Filter by Shift',
-                    prefixIcon: Icon(Icons.schedule),
-                    border: OutlineInputBorder(),
-                  ),
-                  initialValue: _shiftFilter,
-                  items: const [
-                    DropdownMenuItem(value: 'all', child: Text('All Shifts')),
-                    DropdownMenuItem(value: '1', child: Text('Shift 1')),
-                    DropdownMenuItem(value: '2', child: Text('Shift 2')),
-                    DropdownMenuItem(value: '3', child: Text('Shift 3')),
-                  ],
-                  onChanged: (val) {
-                    setModalState(() {});
-                    setState(() => _shiftFilter = val!);
-                  },
-                ),
-                const SizedBox(height: 12),
-
-                // Resource ID
-                TextFormField(
-                  initialValue: _resourceIdQuery,
-                  decoration: const InputDecoration(
-                    labelText: 'Filter by Resource ID',
-                    prefixIcon: Icon(Icons.badge),
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (val) {
-                    setState(() => _resourceIdQuery = val.trim());
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text('Apply Filters', style: TextStyle(fontSize: 16)),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final duties = ref.watch(globalDutyProvider);
+    final s = S.of(context)!;
+    final allDuties = ref.watch(globalDutyProvider);
     final invigilators = ref.watch(invigilatorProvider);
 
-    // Collect unique center names for filter
-    final centerNames = duties.map((d) => d.centerName).toSet().toList()..sort();
+    final centers = allDuties.map((d) => d.centerName).toSet().toList();
 
-    // Apply all filters
-    final filteredDuties = duties.where((duty) {
+    // Filtering logic
+    final filteredDuties = allDuties.where((duty) {
       final inv = invigilators.firstWhere(
         (i) => i.id == duty.invigilatorId,
-        orElse: () => Invigilator(id: '', name: 'Unknown', resourceId: '', mobile: '', mockDutyCount: 0),
+        orElse: () => Invigilator(id: '', name: '', resourceId: '', mobile: '', mockDutyCount: 0),
       );
 
-      final matchesStatus = _statusFilter == 'all' || duty.status.toLowerCase() == _statusFilter;
-      final matchesShift = _shiftFilter == 'all' || duty.shift == _shiftFilter;
-      final matchesCenter = _centerFilter == 'all' || duty.centerName == _centerFilter;
-      final matchesDate = _dateFilter == null || duty.date.contains(_dateFilter!);
-      final matchesResourceId = _resourceIdQuery.isEmpty ||
-          inv.resourceId.toLowerCase().contains(_resourceIdQuery.toLowerCase());
-      final matchesSearch = _searchQuery.isEmpty ||
-          duty.examName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          duty.centerName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          inv.name.toLowerCase().contains(_searchQuery.toLowerCase());
+      // Status
+      if (_statusFilter != 'all' && duty.status.toLowerCase() != _statusFilter.toLowerCase()) {
+        return false;
+      }
 
-      return matchesStatus && matchesShift && matchesCenter && matchesDate &&
-             matchesResourceId && matchesSearch;
+      // Shift
+      if (_shiftFilter != 'all' && duty.shift != _shiftFilter) {
+        return false;
+      }
+
+      // Center
+      if (_centerFilter != 'all' && duty.centerName != _centerFilter) {
+        return false;
+      }
+
+      // Reached
+      if (_reachedFilter == 'reached' && !duty.isReached) {
+        return false;
+      }
+      if (_reachedFilter == 'not_reached' && duty.isReached) {
+        return false;
+      }
+
+      // Date Range
+      if (_selectedDateRange != null) {
+        try {
+          final dt = DateTime.parse(duty.date);
+          final start = DateTime(_selectedDateRange!.start.year, _selectedDateRange!.start.month, _selectedDateRange!.start.day);
+          final end = DateTime(_selectedDateRange!.end.year, _selectedDateRange!.end.month, _selectedDateRange!.end.day, 23, 59, 59);
+          if (dt.isBefore(start) || dt.isAfter(end)) {
+            return false;
+          }
+        } catch (_) {}
+      }
+
+      // General search query (Name, Exam, Mobile, Center, Resource ID)
+      if (_searchQuery.isNotEmpty) {
+        final q = _searchQuery.toLowerCase();
+        final matchExam = duty.examName.toLowerCase().contains(q);
+        final matchCenter = duty.centerName.toLowerCase().contains(q);
+        final matchName = inv.name.toLowerCase().contains(q);
+        final matchMobile = inv.mobile.toLowerCase().contains(q);
+        final matchResource = inv.resourceId.toLowerCase().contains(q);
+        if (!matchExam && !matchCenter && !matchName && !matchMobile && !matchResource) {
+          return false;
+        }
+      }
+
+      return true;
     }).toList();
-
-    final totalCount = duties.length;
-    final acceptedCount = duties.where((d) => d.status.toLowerCase() == 'accepted').length;
-    final pendingCount = duties.where((d) => d.status.toLowerCase() == 'pending').length;
-    final rejectedCount = duties.where((d) => d.status.toLowerCase() == 'rejected').length;
-
-    // Count active filters
-    final activeFilterCount = [
-      _statusFilter != 'all',
-      _shiftFilter != 'all',
-      _centerFilter != 'all',
-      _dateFilter != null,
-      _resourceIdQuery.isNotEmpty,
-    ].where((v) => v).length;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Duty Reports & Summary'),
+        title: Text(s.reports),
         actions: [
-          // Advanced filters button with badge
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.tune),
-                tooltip: 'Advanced Filters',
-                onPressed: () => _showAdvancedFilters(centerNames),
-              ),
-              if (activeFilterCount > 0)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    width: 16,
-                    height: 16,
-                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                    alignment: Alignment.center,
-                    child: Text('$activeFilterCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-            ],
-          ),
-          // Export button
           _isExporting
               ? const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
                 )
               : IconButton(
-                  icon: const Icon(Icons.download_outlined),
-                  tooltip: 'Export Report',
+                  icon: const Icon(Icons.share_outlined, color: Color(0xFF007A87)),
+                  tooltip: s.exportPdf,
                   onPressed: () => _showExportModal(filteredDuties, invigilators),
                 ),
         ],
       ),
       body: Column(
         children: [
-          // Stats Summary Bar
+          // FILTERS ACCORDION / CONTAINER
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.1),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildMiniStat('Total', totalCount.toString(), Colors.blue),
-                _buildMiniStat('Accepted', acceptedCount.toString(), Colors.green),
-                _buildMiniStat('Pending', pendingCount.toString(), Colors.orange),
-                _buildMiniStat('Rejected', rejectedCount.toString(), Colors.red),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
               ],
             ),
-          ),
-
-          // Search & Status Filter Row
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Column(
               children: [
+                // Search bar (Name, Exam, Resource ID, Mobile)
                 TextField(
                   decoration: InputDecoration(
-                    labelText: 'Search',
-                    hintText: 'Exam, center, or invigilator name…',
-                    prefixIcon: const Icon(Icons.search),
+                    hintText: '${s.search}...',
+                    prefixIcon: const Icon(Icons.search, size: 20, color: Color(0xFF007A87)),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () => setState(() => _searchQuery = ''),
+                          )
+                        : null,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    filled: true,
+                    fillColor: Theme.of(context).scaffoldBackgroundColor,
                   ),
-                  onChanged: (val) => setState(() => _searchQuery = val),
+                  onChanged: (val) => setState(() => _searchQuery = val.trim()),
                 ),
                 const SizedBox(height: 10),
-                Row(
-                  children: [
-                    const Text('Status:', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          isDense: true,
+
+                // Date Picker Chip + Quick Filter Chips
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      // Date Range Filter Button
+                      ActionChip(
+                        avatar: Icon(
+                          Icons.date_range,
+                          size: 16,
+                          color: _selectedDateRange != null ? Colors.white : const Color(0xFF007A87),
                         ),
-                        initialValue: _statusFilter,
-                        items: const [
-                          DropdownMenuItem(value: 'all', child: Text('All Duties')),
-                          DropdownMenuItem(value: 'accepted', child: Text('Accepted')),
-                          DropdownMenuItem(value: 'pending', child: Text('Pending')),
-                          DropdownMenuItem(value: 'rejected', child: Text('Rejected')),
-                        ],
-                        onChanged: (val) { if (val != null) setState(() => _statusFilter = val); },
+                        label: Text(
+                          _selectedDateRange == null
+                              ? s.dateRange
+                              : '${DateFormat('dd/MM').format(_selectedDateRange!.start)} - ${DateFormat('dd/MM').format(_selectedDateRange!.end)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: _selectedDateRange != null ? Colors.white : null,
+                          ),
+                        ),
+                        backgroundColor: _selectedDateRange != null ? const Color(0xFF007A87) : null,
+                        onPressed: () async {
+                          final picked = await showDateRangePicker(
+                            context: context,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2030),
+                            initialDateRange: _selectedDateRange,
+                          );
+                          if (picked != null) {
+                            setState(() => _selectedDateRange = picked);
+                          }
+                        },
                       ),
-                    ),
-                    if (activeFilterCount > 0) ...[
+                      if (_selectedDateRange != null) ...[
+                        const SizedBox(width: 6),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          tooltip: s.clear,
+                          onPressed: () => setState(() => _selectedDateRange = null),
+                        ),
+                      ],
                       const SizedBox(width: 8),
-                      Chip(
-                        label: Text('$activeFilterCount filter${activeFilterCount > 1 ? 's' : ''}'),
-                        deleteIcon: const Icon(Icons.clear, size: 14),
-                        onDeleted: () => setState(() {
-                          _shiftFilter = 'all';
-                          _centerFilter = 'all';
-                          _dateFilter = null;
-                          _resourceIdQuery = '';
-                        }),
-                        backgroundColor: const Color(0xFF2563EB).withValues(alpha: 0.1),
-                        labelStyle: const TextStyle(color: Color(0xFF2563EB), fontSize: 12),
+
+                      // Shift Filter
+                      DropdownButton<String>(
+                        value: _shiftFilter,
+                        underline: const SizedBox.shrink(),
+                        items: [
+                          DropdownMenuItem(value: 'all', child: Text('${s.all} ${s.shift}', style: const TextStyle(fontSize: 12))),
+                          DropdownMenuItem(value: '1', child: Text(s.shift1Amount(400), style: const TextStyle(fontSize: 12))),
+                          DropdownMenuItem(value: '2', child: Text(s.shift2Amount(600), style: const TextStyle(fontSize: 12))),
+                          DropdownMenuItem(value: '3', child: Text(s.shift3Amount(800), style: const TextStyle(fontSize: 12))),
+                        ],
+                        onChanged: (val) => setState(() => _shiftFilter = val!),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Status Filter
+                      DropdownButton<String>(
+                        value: _statusFilter,
+                        underline: const SizedBox.shrink(),
+                        items: [
+                          DropdownMenuItem(value: 'all', child: Text('${s.all} ${s.status}', style: const TextStyle(fontSize: 12))),
+                          DropdownMenuItem(value: 'accepted', child: Text(s.accepted, style: const TextStyle(fontSize: 12))),
+                          DropdownMenuItem(value: 'pending', child: Text(s.pending, style: const TextStyle(fontSize: 12))),
+                          DropdownMenuItem(value: 'rejected', child: Text(s.rejected, style: const TextStyle(fontSize: 12))),
+                        ],
+                        onChanged: (val) => setState(() => _statusFilter = val!),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Center Filter
+                      DropdownButton<String>(
+                        value: _centerFilter,
+                        underline: const SizedBox.shrink(),
+                        items: [
+                          DropdownMenuItem(value: 'all', child: Text('${s.all} ${s.centers}', style: const TextStyle(fontSize: 12))),
+                          ...centers.map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(fontSize: 12)))),
+                        ],
+                        onChanged: (val) => setState(() => _centerFilter = val!),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // Arrival Filter
+                      DropdownButton<String>(
+                        value: _reachedFilter,
+                        underline: const SizedBox.shrink(),
+                        items: [
+                          DropdownMenuItem(value: 'all', child: Text('${s.all} ${s.arrival}', style: const TextStyle(fontSize: 12))),
+                          DropdownMenuItem(value: 'reached', child: Text(s.reached, style: const TextStyle(fontSize: 12))),
+                          DropdownMenuItem(value: 'not_reached', child: Text(s.pending, style: const TextStyle(fontSize: 12))),
+                        ],
+                        onChanged: (val) => setState(() => _reachedFilter = val!),
                       ),
                     ],
-                  ],
+                  ),
                 ),
               ],
             ),
           ),
 
-          // Result count
+          // RESULTS HEADER
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '${filteredDuties.length} result${filteredDuties.length != 1 ? 's' : ''}',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                  '${filteredDuties.length} ${s.totalDuties}',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                Text(
+                  _buildFilterDescription(s),
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
-          const Divider(height: 1),
 
-          // List
+          // ALLOCATION RECORDS LIST
           Expanded(
             child: filteredDuties.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.folder_open, size: 64, color: Colors.grey[400]),
-                        const SizedBox(height: 16),
-                        Text('No records match your filters.',
-                          style: TextStyle(color: Colors.grey[500], fontSize: 16)),
-                        const SizedBox(height: 8),
-                        TextButton(
-                          onPressed: () => setState(() {
-                            _statusFilter = 'all'; _shiftFilter = 'all';
-                            _centerFilter = 'all'; _dateFilter = null;
-                            _resourceIdQuery = ''; _searchQuery = '';
-                          }),
-                          child: const Text('Clear all filters'),
-                        ),
+                        Icon(Icons.assignment_late_outlined, size: 56, color: Colors.grey.shade400),
+                        const SizedBox(height: 12),
+                        Text(s.noReportsFound, style: const TextStyle(color: Colors.grey)),
                       ],
                     ),
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 80),
                     itemCount: filteredDuties.length,
                     itemBuilder: (context, index) {
                       final duty = filteredDuties[index];
                       final inv = invigilators.firstWhere(
                         (i) => i.id == duty.invigilatorId,
-                        orElse: () => Invigilator(id: '', name: 'Unknown', resourceId: '', mobile: '', mockDutyCount: 0),
+                        orElse: () => Invigilator(id: '', name: 'Unknown Staff', resourceId: '-', mobile: '', mockDutyCount: 0),
                       );
 
+                      final statusLabel = duty.status.toLowerCase() == 'accepted'
+                          ? s.accepted
+                          : (duty.status.toLowerCase() == 'rejected' ? s.rejected : s.pending);
+
                       return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
+                        margin: const EdgeInsets.only(bottom: 10),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         child: Padding(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(14),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Title row: Exam Name + Status badge
                               Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Expanded(
-                                    child: Text(duty.examName,
+                                    child: Text(
+                                      inv.name, // COMPLETE FULL NAME
                                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
-                                  _StatusTag(status: duty.status),
-                                  const SizedBox(width: 4),
-                                  GestureDetector(
-                                    onTap: () => _confirmDelete(context, ref, duty.id, duty.examName),
-                                    child: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                                  _buildStatusBadge(duty.status, statusLabel),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Text('${s.resourceId}: ${inv.resourceId}', style: TextStyle(color: Colors.grey.shade700, fontSize: 12, fontWeight: FontWeight.w600)),
+                                  const SizedBox(width: 12),
+                                  Text('${s.mobile}: ${inv.mobile}', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
+                                ],
+                              ),
+                              const Divider(height: 18),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('${s.exams}: ${duty.examName}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Text('${s.date}: ${duty.date}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('${s.center}: ${duty.centerName}', style: TextStyle(fontSize: 12, color: Colors.grey.shade800)),
+                                  Text('${s.shift} ${duty.shift} • ${duty.payment}', style: const TextStyle(fontSize: 12, color: Color(0xFF007A87), fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                              if (duty.isReached) ...[
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.green.shade300, width: 0.5),
                                   ),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              // Info grid
-                              _InfoRow(Icons.person, 'Invigilator', '${inv.name} · ${inv.resourceId}'),
-                              const SizedBox(height: 4),
-                              _InfoRow(Icons.business, 'Center', duty.centerName),
-                              const SizedBox(height: 4),
-                              _InfoRow(Icons.calendar_today, 'Date', duty.date),
-                              const Divider(height: 16),
-                              // Detailed row
-                              Row(
-                                children: [
-                                  Expanded(child: _InfoRow(Icons.badge_outlined, 'Role', _getRoleDisplayName(duty.role))),
-                                  Expanded(child: _InfoRow(Icons.schedule_outlined, 'Shift', duty.shift)),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Expanded(child: _InfoRow(Icons.currency_rupee, 'Payment', duty.payment)),
-                                  Expanded(child: _InfoRow(Icons.restaurant_outlined, 'Lunch', duty.lunch)),
-                                ],
-                              ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              const Icon(Icons.check_circle, size: 14, color: Colors.green),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                '${s.arrival}: ${duty.reachedTime ?? "-"} (${duty.reachedPerformance ?? s.onTime})',
+                                                style: const TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold),
+                                              ),
+                                            ],
+                                          ),
+                                          if (duty.resolvedMapsUrl != null)
+                                            GestureDetector(
+                                              onTap: () => LocationService.openMapLocation(
+                                                duty.resolvedMapsUrl!,
+                                                latitude: duty.reachedLatitude,
+                                                longitude: duty.reachedLongitude,
+                                              ),
+                                              child: const Row(
+                                                children: [
+                                                  Icon(Icons.map_outlined, size: 13, color: Color(0xFF007A87)),
+                                                  SizedBox(width: 3),
+                                                  Text('Map', style: TextStyle(color: Color(0xFF007A87), fontSize: 11, fontWeight: FontWeight.bold)),
+                                                ],
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      if (duty.reachedLocation != null) ...[
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          'GPS: ${duty.reachedLocation}',
+                                          style: TextStyle(color: Colors.grey.shade700, fontSize: 10, fontWeight: FontWeight.w500),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -556,51 +509,7 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
     );
   }
 
-  Widget _buildMiniStat(String label, String value, Color color) {
-    return Column(
-      children: [
-        Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
-        const SizedBox(height: 4),
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-      ],
-    );
-  }
-}
-
-// ── Small helper widgets ──────────────────────────────────────────────────────
-
-class _InfoRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _InfoRow(this.icon, this.label, this.value);
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 13, color: Colors.grey[500]),
-        const SizedBox(width: 5),
-        Expanded(
-          child: Text(
-            '$label: $value',
-            style: const TextStyle(fontSize: 12),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatusTag extends StatelessWidget {
-  final String status;
-  const _StatusTag({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildStatusBadge(String status, String label) {
     Color color;
     switch (status.toLowerCase()) {
       case 'accepted': color = Colors.green; break;
@@ -609,13 +518,9 @@ class _StatusTag extends StatelessWidget {
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color, width: 1),
-      ),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
       child: Text(
-        status.toUpperCase(),
+        label.toUpperCase(),
         style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
       ),
     );

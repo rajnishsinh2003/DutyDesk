@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:duty_desk/l10n/app_localizations.dart';
 import '../providers/center_provider.dart';
 
 class ManageCentersScreen extends ConsumerWidget {
@@ -9,13 +10,14 @@ class ManageCentersScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final centers = ref.watch(centerProvider);
+    final s = S.of(context)!;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Manage Centers'),
+        title: Text(s.manageCenters),
       ),
       body: centers.isEmpty
-          ? const Center(child: Text('No centers found. Add one!'))
+          ? Center(child: Text(s.noCentersFound))
           : ListView.builder(
               padding: const EdgeInsets.all(16.0),
               itemCount: centers.length,
@@ -29,7 +31,46 @@ class ManageCentersScreen extends ConsumerWidget {
                       child: const Icon(Icons.business),
                     ),
                     title: Text(center.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text('${center.location}\nCapacity: ${center.capacity}'),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${center.location} • ${s.capacityLabel(center.capacity)}'),
+                        const SizedBox(height: 4),
+                        if (center.latitude != null && center.longitude != null)
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.green.withValues(alpha: 0.4), width: 0.8),
+                                ),
+                                child: Text(
+                                  'GPS: ${center.latitude!.toStringAsFixed(3)}, ${center.longitude!.toStringAsFixed(3)} (${center.allowedRadiusMeters}m)',
+                                  style: const TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          )
+                        else
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  s.noGpsGeofenceConfigured,
+                                  style: const TextStyle(fontSize: 10, color: Colors.orange, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
                     isThreeLine: true,
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -62,15 +103,16 @@ class ManageCentersScreen extends ConsumerWidget {
   }
 
   void _showDeleteDialog(BuildContext context, WidgetRef ref, String id, String name) {
+    final s = S.of(context)!;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Center'),
-        content: Text('Are you sure you want to delete $name?'),
+        title: Text(s.deleteCenter),
+        content: Text(s.deleteCenterConfirm(name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(s.cancel),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
@@ -78,7 +120,7 @@ class ManageCentersScreen extends ConsumerWidget {
               ref.read(centerProvider.notifier).deleteCenter(id);
               Navigator.pop(ctx);
             },
-            child: const Text('Delete'),
+            child: Text(s.delete),
           ),
         ],
       ),

@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:excel/excel.dart';
 
 import '../../invigilator/providers/duty_provider.dart';
@@ -17,75 +18,84 @@ class ReportService {
     required String filterDescription,
   }) async {
     try {
+      if (duties.isEmpty) {
+        throw Exception('No records available to export.');
+      }
+
       final pdf = pw.Document();
 
-      // Use built-in PDF fonts (no asset download needed)
-      final baseFont = pw.Font.helvetica();
-      final boldFont = pw.Font.helveticaBold();
+      final baseFont = await PdfGoogleFonts.notoSansRegular();
+      final boldFont = await PdfGoogleFonts.notoSansBold();
 
       // Build rows
       final rows = duties.map((duty) {
         final inv = invigilators.firstWhere(
           (i) => i.id == duty.invigilatorId,
-          orElse: () => Invigilator(id: '', name: 'Unknown', resourceId: '-', mobile: '', mockDutyCount: 0),
+          orElse: () => Invigilator(id: '', name: 'Unknown Staff', resourceId: '-', mobile: '', mockDutyCount: 0),
         );
+        final arrivalStr = duty.isReached
+            ? '${duty.reachedTime ?? "-"}'
+                ' (${duty.reachedPerformance ?? "Reached"})'
+                '${duty.reachedLocation != null ? "\nGPS: ${duty.reachedLocation}" : ""}'
+            : 'Not Reached';
+
         return [
-          duty.examName,
           duty.date,
-          duty.centerName,
-          inv.name,
-          inv.resourceId,
-          duty.role.toUpperCase(),
+          duty.examName,
           'Shift ${duty.shift}',
+          inv.name, // COMPLETE FULL NAME
+          inv.resourceId,
+          duty.centerName,
+          duty.reportingTime,
           duty.payment,
-          duty.lunch,
           duty.status.toUpperCase(),
+          arrivalStr,
         ];
       }).toList();
 
       final headers = [
-        'Exam', 'Date', 'Center', 'Name', 'Resource ID',
-        'Role', 'Shift', 'Payment', 'Lunch', 'Status',
+        'Date', 'Exam', 'Shift', 'Staff Name', 'Resource No.',
+        'Room / Center', 'Reporting Time', 'Amount', 'Status', 'Arrival & GPS Info',
       ];
 
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4.landscape,
-          margin: const pw.EdgeInsets.all(24),
+          margin: const pw.EdgeInsets.all(20),
           build: (context) => [
             pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(
-                  'DutyDesk — Duty Report',
-                  style: pw.TextStyle(font: boldFont, fontSize: 18, color: PdfColors.blueGrey900),
+                  'DutyDesk — Date-Wise Duty Allocation & Attendance Report',
+                  style: pw.TextStyle(font: boldFont, fontSize: 16, color: PdfColors.blueGrey900),
                 ),
                 pw.SizedBox(height: 4),
                 pw.Text(
                   'Filter: $filterDescription   |   Generated: ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}',
-                  style: pw.TextStyle(font: baseFont, fontSize: 9, color: PdfColors.grey600),
+                  style: pw.TextStyle(font: baseFont, fontSize: 8.5, color: PdfColors.grey600),
                 ),
-                pw.SizedBox(height: 16),
+                pw.SizedBox(height: 14),
                 pw.Table(
                   border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
                   columnWidths: {
-                    0: const pw.FlexColumnWidth(2.2),
-                    1: const pw.FlexColumnWidth(1.4),
-                    2: const pw.FlexColumnWidth(1.6),
-                    3: const pw.FlexColumnWidth(1.8),
-                    4: const pw.FlexColumnWidth(1.4),
-                    5: const pw.FlexColumnWidth(1.2),
-                    6: const pw.FlexColumnWidth(1.0),
-                    7: const pw.FlexColumnWidth(1.2),
-                    8: const pw.FlexColumnWidth(1.0),
-                    9: const pw.FlexColumnWidth(1.2),
+                    0: const pw.FlexColumnWidth(1.2), // Date
+                    1: const pw.FlexColumnWidth(2.0), // Exam
+                    2: const pw.FlexColumnWidth(1.0), // Shift
+                    3: const pw.FlexColumnWidth(2.0), // Staff Name
+                    4: const pw.FlexColumnWidth(1.3), // Resource No
+                    5: const pw.FlexColumnWidth(1.8), // Room / Center
+                    6: const pw.FlexColumnWidth(1.2), // Reporting Time
+                    7: const pw.FlexColumnWidth(1.0), // Amount
+                    8: const pw.FlexColumnWidth(1.1), // Status
+                    9: const pw.FlexColumnWidth(1.8), // Arrival Info
                   },
                   children: [
                     // Header Row
                     pw.TableRow(
                       decoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
                       children: headers.map((h) => pw.Padding(
-                        padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+                        padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
                         child: pw.Text(h,
                           style: pw.TextStyle(font: boldFont, fontSize: 8, color: PdfColors.white),
                         ),
@@ -99,7 +109,7 @@ class ReportService {
                       return pw.TableRow(
                         decoration: pw.BoxDecoration(color: bgColor),
                         children: row.map((cell) => pw.Padding(
-                          padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 4),
                           child: pw.Text(cell,
                             style: pw.TextStyle(font: baseFont, fontSize: 7.5),
                           ),
@@ -109,9 +119,18 @@ class ReportService {
                   ],
                 ),
                 pw.SizedBox(height: 12),
-                pw.Text(
-                  'Total Records: ${duties.length}',
-                  style: pw.TextStyle(font: boldFont, fontSize: 9, color: PdfColors.blueGrey700),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      'Total Records: ${duties.length}',
+                      style: pw.TextStyle(font: boldFont, fontSize: 9, color: PdfColors.blueGrey700),
+                    ),
+                    pw.Text(
+                      'DutyDesk Staff Management System',
+                      style: pw.TextStyle(font: baseFont, fontSize: 8, color: PdfColors.grey600),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -122,14 +141,14 @@ class ReportService {
       final bytes = await pdf.save();
       final dir = await getTemporaryDirectory();
       final timestamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
-      final file = File('${dir.path}/DutyReport_$timestamp.pdf');
+      final file = File('${dir.path}/DutyAllocationReport_$timestamp.pdf');
       await file.writeAsBytes(bytes);
 
       await SharePlus.instance.share(
         ShareParams(
           files: [XFile(file.path, mimeType: 'application/pdf')],
-          subject: 'DutyDesk Report',
-          text: 'DutyDesk Duty Report — $filterDescription',
+          subject: 'DutyDesk Date-Wise Allocation Report',
+          text: 'DutyDesk Allocation Report — $filterDescription',
         ),
       );
     } catch (e) {
@@ -144,81 +163,79 @@ class ReportService {
     required String filterDescription,
   }) async {
     try {
-      final excel = Excel.createExcel();
-      final sheet = excel['DutyReport'];
+      if (duties.isEmpty) {
+        throw Exception('No records available to export.');
+      }
 
-      // Header row styling
+      final excel = Excel.createExcel();
+      final sheet = excel['Allocation Report'];
+
+      // Header row
       final headers = [
-        'Exam Name', 'Date', 'Center', 'Invigilator Name',
-        'Resource ID', 'Role', 'Shift', 'Payment', 'Lunch', 'Status',
+        'Date',
+        'Exam Name',
+        'Shift',
+        'Staff Full Name',
+        'Resource Number',
+        'Mobile Number',
+        'Room / Center',
+        'Reporting Time',
+        'Excellent Until',
+        'Good Until',
+        'Duty Amount',
+        'Lunch Provided',
+        'Duty Status',
+        'Arrival Status',
+        'Reached Time',
+        'Arrival Performance',
+        'GPS Location',
+        'Google Maps Link',
       ];
 
-      final headerStyle = CellStyle(
-        bold: true,
-        fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
-        backgroundColorHex: ExcelColor.fromHexString('#1E3A5F'),
-        horizontalAlign: HorizontalAlign.Center,
-      );
+      sheet.appendRow(headers.map((h) => TextCellValue(h)).toList());
 
-      // Write headers
-      for (var i = 0; i < headers.length; i++) {
-        final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
-        cell.value = TextCellValue(headers[i]);
-        cell.cellStyle = headerStyle;
-      }
-
-      // Write data rows
-      for (var rIdx = 0; rIdx < duties.length; rIdx++) {
-        final duty = duties[rIdx];
+      // Data rows
+      for (final duty in duties) {
         final inv = invigilators.firstWhere(
           (i) => i.id == duty.invigilatorId,
-          orElse: () => Invigilator(id: '', name: 'Unknown', resourceId: '-', mobile: '', mockDutyCount: 0),
+          orElse: () => Invigilator(id: '', name: 'Unknown Staff', resourceId: '-', mobile: '-', mockDutyCount: 0),
         );
 
-        final rowData = [
-          duty.examName, duty.date, duty.centerName, inv.name,
-          inv.resourceId, duty.role.toUpperCase(),
-          'Shift ${duty.shift}', duty.payment, duty.lunch, duty.status.toUpperCase(),
-        ];
-
-        final rowBg = rIdx.isEven
-            ? ExcelColor.fromHexString('#F0F4F8')
-            : ExcelColor.fromHexString('#FFFFFF');
-
-        for (var cIdx = 0; cIdx < rowData.length; cIdx++) {
-          final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: cIdx, rowIndex: rIdx + 1));
-          cell.value = TextCellValue(rowData[cIdx]);
-          cell.cellStyle = CellStyle(backgroundColorHex: rowBg);
-        }
+        sheet.appendRow([
+          TextCellValue(duty.date),
+          TextCellValue(duty.examName),
+          TextCellValue('Shift ${duty.shift}'),
+          TextCellValue(inv.name), // COMPLETE FULL NAME
+          TextCellValue(inv.resourceId),
+          TextCellValue(inv.mobile),
+          TextCellValue(duty.centerName),
+          TextCellValue(duty.reportingTime),
+          TextCellValue(duty.excellentUntil),
+          TextCellValue(duty.goodUntil),
+          TextCellValue(duty.payment),
+          TextCellValue(duty.lunch),
+          TextCellValue(duty.status.toUpperCase()),
+          TextCellValue(duty.isReached ? 'REACHED' : 'NOT REACHED'),
+          TextCellValue(duty.reachedTime ?? '-'),
+          TextCellValue(duty.reachedPerformance ?? '-'),
+          TextCellValue(duty.reachedLocation ?? '-'),
+          TextCellValue(duty.reachedMapsUrl ?? '-'),
+        ]);
       }
 
-      // Auto-width approximation
-      for (var i = 0; i < headers.length; i++) {
-        sheet.setColumnWidth(i, 20.0);
-      }
-
-      // Summary row
-      final summaryRowIdx = duties.length + 2;
-      final summaryCell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: summaryRowIdx));
-      summaryCell.value = TextCellValue('Total: ${duties.length} records | Filter: $filterDescription | Generated: ${DateFormat('dd-MM-yyyy HH:mm').format(DateTime.now())}');
-      summaryCell.cellStyle = CellStyle(
-        bold: true,
-        fontColorHex: ExcelColor.fromHexString('#1E3A5F'),
-      );
-
-      final fileBytes = excel.save();
-      if (fileBytes == null) throw Exception('Excel save returned null');
+      final bytes = excel.encode();
+      if (bytes == null) throw Exception('Excel encoding returned null bytes.');
 
       final dir = await getTemporaryDirectory();
       final timestamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
-      final file = File('${dir.path}/DutyReport_$timestamp.xlsx');
-      await file.writeAsBytes(fileBytes);
+      final file = File('${dir.path}/DutyAllocationReport_$timestamp.xlsx');
+      await file.writeAsBytes(bytes);
 
       await SharePlus.instance.share(
         ShareParams(
           files: [XFile(file.path, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')],
           subject: 'DutyDesk Excel Report',
-          text: 'DutyDesk Duty Report — $filterDescription',
+          text: 'DutyDesk Date-Wise Allocation Report — $filterDescription',
         ),
       );
     } catch (e) {

@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:duty_desk/l10n/app_localizations.dart';
+import '../auth_provider.dart';
 
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
@@ -34,13 +36,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     // Navigate after 3 seconds based on Session
     Future.delayed(const Duration(seconds: 3), () async {
-      final prefs = await SharedPreferences.getInstance();
-      final role = prefs.getString('role');
-      
+      final authNotifier = ref.read(authProvider.notifier);
+      final restoredState = await authNotifier.restoreSession();
+
       if (mounted) {
-        if (role == 'admin') {
+        if (restoredState.role == UserRole.admin) {
           context.go('/admin_dashboard');
-        } else if (role == 'invigilator') {
+        } else if (restoredState.role == UserRole.invigilator && restoredState.userId != null) {
           context.go('/invigilator_dashboard');
         } else {
           context.go('/login');
@@ -97,7 +99,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     const SizedBox(height: 32),
                     // App Name
                     Text(
-                      'DutyDesk',
+                      S.of(context)?.appName ?? 'DutyDesk',
                       style: theme.textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         letterSpacing: 1.5,
@@ -107,7 +109,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     const SizedBox(height: 8),
                     // Subtitle
                     Text(
-                      'Exam Invigilation Management',
+                      S.of(context)?.examInvigilationManagement ?? 'Exam Invigilation Management',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: Colors.grey[500],
                         letterSpacing: 0.5,

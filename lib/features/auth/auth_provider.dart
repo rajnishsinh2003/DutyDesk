@@ -43,6 +43,8 @@ class AuthState {
 class AuthNotifier extends Notifier<AuthState> {
   @override
   AuthState build() {
+    _initFromPreferences();
+
     if (Firebase.apps.isNotEmpty) {
       try {
         final currentUser = FirebaseAuth.instance.currentUser;
@@ -56,6 +58,50 @@ class AuthNotifier extends Notifier<AuthState> {
       }
     }
     return AuthState();
+  }
+
+  void _initFromPreferences() async {
+    await restoreSession();
+  }
+
+  Future<AuthState> restoreSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final roleStr = prefs.getString('role');
+      final userId = prefs.getString('userId');
+      final userName = prefs.getString('userName');
+
+      if (roleStr != null && userId != null && userId.isNotEmpty) {
+        UserRole role = UserRole.none;
+        if (roleStr == 'admin') role = UserRole.admin;
+        if (roleStr == 'invigilator') role = UserRole.invigilator;
+
+        if (role != UserRole.none) {
+          final newState = AuthState(
+            role: role,
+            userId: userId,
+            userName: userName ?? (role == UserRole.admin ? 'Admin User' : 'Invigilator'),
+          );
+          state = newState;
+          return newState;
+        }
+      }
+    } catch (e) {
+      debugPrint("Error restoring auth session: $e");
+    }
+    return state;
+  }
+
+  void setSession({
+    required UserRole role,
+    required String userId,
+    required String userName,
+  }) {
+    state = AuthState(
+      role: role,
+      userId: userId,
+      userName: userName,
+    );
   }
 
   Future<void> login(String mobile, String password, bool isAdminLogin) async {

@@ -13,6 +13,9 @@ class Invigilator {
   final String? address;
   final int mockDutyCount;
   final DateTime? lastMockAssignedDate;
+  final bool isActive;
+  final List<String> unavailableDates;
+  final String? photoUrl;
 
   Invigilator({
     required this.id,
@@ -23,6 +26,9 @@ class Invigilator {
     this.address,
     required this.mockDutyCount,
     this.lastMockAssignedDate,
+    this.isActive = true,
+    this.unavailableDates = const [],
+    this.photoUrl,
   });
 
   Invigilator copyWith({
@@ -34,6 +40,9 @@ class Invigilator {
     String? address,
     int? mockDutyCount,
     DateTime? lastMockAssignedDate,
+    bool? isActive,
+    List<String>? unavailableDates,
+    String? photoUrl,
   }) {
     return Invigilator(
       id: id ?? this.id,
@@ -44,6 +53,9 @@ class Invigilator {
       address: address ?? this.address,
       mockDutyCount: mockDutyCount ?? this.mockDutyCount,
       lastMockAssignedDate: lastMockAssignedDate ?? this.lastMockAssignedDate,
+      isActive: isActive ?? this.isActive,
+      unavailableDates: unavailableDates ?? this.unavailableDates,
+      photoUrl: photoUrl ?? this.photoUrl,
     );
   }
 }
@@ -65,6 +77,7 @@ class InvigilatorNotifier extends Notifier<List<Invigilator>> {
       state = snapshot.docs.map((doc) {
         final data = doc.data();
         final Timestamp? timestamp = data['lastMockAssignedDate'];
+        final List<dynamic> datesRaw = data['unavailableDates'] ?? [];
         return Invigilator(
           id: doc.id,
           name: data['name'] ?? '',
@@ -74,6 +87,9 @@ class InvigilatorNotifier extends Notifier<List<Invigilator>> {
           address: data['address'],
           mockDutyCount: data['mockDutyCount'] ?? 0,
           lastMockAssignedDate: timestamp?.toDate(),
+          isActive: data['isActive'] ?? true,
+          unavailableDates: datesRaw.map((e) => e.toString()).toList(),
+          photoUrl: data['photoUrl'],
         );
       }).toList();
     }, onError: (error) {
@@ -105,6 +121,9 @@ class InvigilatorNotifier extends Notifier<List<Invigilator>> {
         'address': address,
         'mockDutyCount': 0,
         'lastMockAssignedDate': null,
+        'isActive': true,
+        'unavailableDates': [],
+        'photoUrl': null,
       });
     } catch (e) {
       // Handle error
@@ -134,6 +153,55 @@ class InvigilatorNotifier extends Notifier<List<Invigilator>> {
     }
   }
 
+  Future<void> toggleInvigilatorActiveStatus(String id, bool active) async {
+    if (Firebase.apps.isEmpty) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('invigilators').doc(id).update({
+        'isActive': active,
+      });
+    } catch (e) {
+      log("Error toggling active status: $e");
+    }
+  }
+
+  Future<void> updateUnavailableDates(String id, List<String> dates) async {
+    if (Firebase.apps.isEmpty) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('invigilators').doc(id).update({
+        'unavailableDates': dates,
+      });
+    } catch (e) {
+      log("Error updating unavailable dates: $e");
+    }
+  }
+
+  Future<void> updateProfileDetails({
+    required String id,
+    required String name,
+    required String mobile,
+    required String email,
+    String? address,
+    String? photoUrl,
+  }) async {
+    if (Firebase.apps.isEmpty) return;
+
+    try {
+      final updates = <String, dynamic>{
+        'name': name,
+        'mobile': mobile,
+        'email': email,
+      };
+      if (address != null) updates['address'] = address;
+      if (photoUrl != null) updates['photoUrl'] = photoUrl;
+
+      await FirebaseFirestore.instance.collection('invigilators').doc(id).update(updates);
+    } catch (e) {
+      log("Error updating profile details: $e");
+    }
+  }
+
   Future<void> updateMockStats(String id) async {
     if (Firebase.apps.isEmpty) return;
 
@@ -150,6 +218,27 @@ class InvigilatorNotifier extends Notifier<List<Invigilator>> {
       });
     } catch (e) {
       // Handle error
+    }
+  }
+
+  Future<void> toggleUnavailableDate(String id, String date) async {
+    if (Firebase.apps.isEmpty) return;
+
+    try {
+      final docRef = FirebaseFirestore.instance.collection('invigilators').doc(id);
+      final snapshot = await docRef.get();
+      if (!snapshot.exists) return;
+
+      final currentDates = List<String>.from(snapshot.data()?['unavailableDates'] ?? []);
+      if (currentDates.contains(date)) {
+        currentDates.remove(date);
+      } else {
+        currentDates.add(date);
+      }
+
+      await docRef.update({'unavailableDates': currentDates});
+    } catch (e) {
+      log('Error toggling unavailable date: $e');
     }
   }
 
