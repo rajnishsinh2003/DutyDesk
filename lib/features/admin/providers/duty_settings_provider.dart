@@ -15,6 +15,15 @@ class DutySettings {
   final String reportingExcellentEndTime; // e.g. "06:20 AM"
   final String reportingGoodEndTime; // e.g. "06:30 AM"
   final bool voiceFeedbackEnabled;
+  final bool requireFaceVerification;
+  final bool enableTravelAllowance;
+  final int travelAllowancePerKm;
+  final String smsGatewayUrl;
+  final String smsApiKey;
+  final String smsProvider; // 'fast2sms', 'msg91', 'textlocal', 'twilio', 'generic'
+  final String whatsappGatewayUrl;
+  final String whatsappApiKey;
+  final int dataRetentionDays;
 
   const DutySettings({
     this.allowDutySwap = false,
@@ -27,6 +36,15 @@ class DutySettings {
     this.reportingExcellentEndTime = '06:20 AM',
     this.reportingGoodEndTime = '06:30 AM',
     this.voiceFeedbackEnabled = true,
+    this.requireFaceVerification = false,
+    this.enableTravelAllowance = true,
+    this.travelAllowancePerKm = 10,
+    this.smsGatewayUrl = '',
+    this.smsApiKey = '',
+    this.smsProvider = 'generic',
+    this.whatsappGatewayUrl = '',
+    this.whatsappApiKey = '',
+    this.dataRetentionDays = 90,
   });
 
   factory DutySettings.fromMap(Map<String, dynamic>? data) {
@@ -42,6 +60,15 @@ class DutySettings {
       reportingExcellentEndTime: data['reportingExcellentEndTime'] ?? '06:20 AM',
       reportingGoodEndTime: data['reportingGoodEndTime'] ?? '06:30 AM',
       voiceFeedbackEnabled: data['voiceFeedbackEnabled'] ?? true,
+      requireFaceVerification: data['requireFaceVerification'] ?? false,
+      enableTravelAllowance: data['enableTravelAllowance'] ?? true,
+      travelAllowancePerKm: data['travelAllowancePerKm'] ?? 10,
+      smsGatewayUrl: data['smsGatewayUrl'] ?? '',
+      smsApiKey: data['smsApiKey'] ?? '',
+      smsProvider: data['smsProvider'] ?? 'generic',
+      whatsappGatewayUrl: data['whatsappGatewayUrl'] ?? '',
+      whatsappApiKey: data['whatsappApiKey'] ?? '',
+      dataRetentionDays: data['dataRetentionDays'] ?? 90,
     );
   }
 
@@ -57,6 +84,15 @@ class DutySettings {
       'reportingExcellentEndTime': reportingExcellentEndTime,
       'reportingGoodEndTime': reportingGoodEndTime,
       'voiceFeedbackEnabled': voiceFeedbackEnabled,
+      'requireFaceVerification': requireFaceVerification,
+      'enableTravelAllowance': enableTravelAllowance,
+      'travelAllowancePerKm': travelAllowancePerKm,
+      'smsGatewayUrl': smsGatewayUrl,
+      'smsApiKey': smsApiKey,
+      'smsProvider': smsProvider,
+      'whatsappGatewayUrl': whatsappGatewayUrl,
+      'whatsappApiKey': whatsappApiKey,
+      'dataRetentionDays': dataRetentionDays,
       'updatedAt': FieldValue.serverTimestamp(),
     };
   }
@@ -72,6 +108,15 @@ class DutySettings {
     String? reportingExcellentEndTime,
     String? reportingGoodEndTime,
     bool? voiceFeedbackEnabled,
+    bool? requireFaceVerification,
+    bool? enableTravelAllowance,
+    int? travelAllowancePerKm,
+    String? smsGatewayUrl,
+    String? smsApiKey,
+    String? smsProvider,
+    String? whatsappGatewayUrl,
+    String? whatsappApiKey,
+    int? dataRetentionDays,
   }) {
     return DutySettings(
       allowDutySwap: allowDutySwap ?? this.allowDutySwap,
@@ -84,6 +129,15 @@ class DutySettings {
       reportingExcellentEndTime: reportingExcellentEndTime ?? this.reportingExcellentEndTime,
       reportingGoodEndTime: reportingGoodEndTime ?? this.reportingGoodEndTime,
       voiceFeedbackEnabled: voiceFeedbackEnabled ?? this.voiceFeedbackEnabled,
+      requireFaceVerification: requireFaceVerification ?? this.requireFaceVerification,
+      enableTravelAllowance: enableTravelAllowance ?? this.enableTravelAllowance,
+      travelAllowancePerKm: travelAllowancePerKm ?? this.travelAllowancePerKm,
+      smsGatewayUrl: smsGatewayUrl ?? this.smsGatewayUrl,
+      smsApiKey: smsApiKey ?? this.smsApiKey,
+      smsProvider: smsProvider ?? this.smsProvider,
+      whatsappGatewayUrl: whatsappGatewayUrl ?? this.whatsappGatewayUrl,
+      whatsappApiKey: whatsappApiKey ?? this.whatsappApiKey,
+      dataRetentionDays: dataRetentionDays ?? this.dataRetentionDays,
     );
   }
 
@@ -170,6 +224,22 @@ class DutySettingsNotifier extends Notifier<DutySettings> {
 
   Future<void> toggleVoiceFeedback(bool enabled) async {
     await updateSettings(state.copyWith(voiceFeedbackEnabled: enabled));
+  }
+
+  Future<void> toggleRequireFaceVerification(bool enabled) async {
+    await updateSettings(state.copyWith(requireFaceVerification: enabled));
+  }
+
+  Future<void> toggleEnableTravelAllowance(bool enabled) async {
+    await updateSettings(state.copyWith(enableTravelAllowance: enabled));
+  }
+
+  Future<void> updateTravelAllowanceRate(int ratePerKm) async {
+    await updateSettings(state.copyWith(travelAllowancePerKm: ratePerKm));
+  }
+
+  Future<void> updateSmsGatewayUrl(String url) async {
+    await updateSettings(state.copyWith(smsGatewayUrl: url));
   }
 }
 

@@ -1259,4 +1259,46 @@ class SEn extends S {
 
   @override
   String get labStaff => 'Lab Staff';
+
+  @override
+  String get clockOut => 'Clock Out';
+
+  @override
+  String get clockedOut => 'Clocked Out';
+
+  @override
+  String get clockOutFromDuty => 'Clock Out from Duty';
+
+  @override
+  String get dutyClockOut => 'Duty Clock-Out';
+
+  @override
+  String get noShow => 'No-Show';
+
+  @override
+  String get markNoShow => 'Mark No-Show';
+
+  @override
+  String get standbyStaff => 'Standby Staff';
+
+  @override
+  String get standbyPool => 'Standby Pool';
+
+  @override
+  String get dispatchStandby => 'Dispatch Standby';
+
+  @override
+  String get tagAsStandby => 'Tag as Standby';
+
+  @override
+  String get standbyReplacement => 'Standby Replacement';
+
+  @override
+  String get incidentReport => 'Incident Report';
+
+  @override
+  String get reportExamIncident => 'Report Exam Incident';
+
+  @override
+  String get incidentLogs => 'Incident Logs';
 }

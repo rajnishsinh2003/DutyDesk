@@ -42,6 +42,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
       if (mounted) {
         if (restoredState.role == UserRole.admin) {
           context.go('/admin_dashboard');
+        } else if (restoredState.role == UserRole.auditor) {
+          context.go('/auditor_dashboard');
+        } else if (restoredState.role == UserRole.finance) {
+          context.go('/admin_dashboard/payroll');
         } else if (restoredState.role == UserRole.invigilator && restoredState.userId != null) {
           context.go('/invigilator_dashboard');
         } else {

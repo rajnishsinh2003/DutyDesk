@@ -80,6 +80,16 @@ class _MaintainDataScreenState extends ConsumerState<MaintainDataScreen> with Si
         iconTheme: IconThemeData(color: textColor),
         actions: [
           IconButton(
+            icon: const Icon(Icons.history_rounded),
+            tooltip: 'Audit Trail',
+            onPressed: () => context.push('/admin_dashboard/audit_trail'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.upload_file_rounded),
+            tooltip: 'Bulk Import (Excel / CSV)',
+            onPressed: () => context.push('/admin_dashboard/bulk_import'),
+          ),
+          IconButton(
             icon: const Icon(Icons.search_rounded),
             tooltip: 'Global Search',
             onPressed: () => context.go('/admin_dashboard/global_search'),

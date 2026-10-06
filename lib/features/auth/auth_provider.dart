@@ -5,8 +5,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// Simulating User Roles
-enum UserRole { admin, invigilator, none }
+// User Roles for Role-Based Access Control (RBAC)
+enum UserRole { admin, invigilator, finance, auditor, none }
 
 class AuthState {
   final bool isLoading;
@@ -75,12 +75,14 @@ class AuthNotifier extends Notifier<AuthState> {
         UserRole role = UserRole.none;
         if (roleStr == 'admin') role = UserRole.admin;
         if (roleStr == 'invigilator') role = UserRole.invigilator;
+        if (roleStr == 'finance') role = UserRole.finance;
+        if (roleStr == 'auditor') role = UserRole.auditor;
 
         if (role != UserRole.none) {
           final newState = AuthState(
             role: role,
             userId: userId,
-            userName: userName ?? (role == UserRole.admin ? 'Admin User' : 'Invigilator'),
+            userName: userName ?? _roleDisplayName(role),
           );
           state = newState;
           return newState;
@@ -92,16 +94,82 @@ class AuthNotifier extends Notifier<AuthState> {
     return state;
   }
 
+  String _roleDisplayName(UserRole role) {
+    switch (role) {
+      case UserRole.admin: return 'Admin User';
+      case UserRole.finance: return 'Finance Officer';
+      case UserRole.auditor: return 'Auditor';
+      case UserRole.invigilator: return 'Invigilator';
+      case UserRole.none: return 'User';
+    }
+  }
+
   void setSession({
     required UserRole role,
     required String userId,
     required String userName,
-  }) {
+  }) async {
     state = AuthState(
       role: role,
       userId: userId,
       userName: userName,
     );
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('role', role.name);
+      await prefs.setString('userId', userId);
+      await prefs.setString('userName', userName);
+    } catch (_) {}
+  }
+
+  /// 1-Click Instant Demo Authentication for rapid evaluation of all 4 roles.
+  Future<void> loginAsDemoRole(UserRole role) async {
+    state = state.copyWith(isLoading: true, error: null);
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    String userId;
+    String userName;
+    String roleStr;
+
+    switch (role) {
+      case UserRole.admin:
+        userId = 'admin-master';
+        userName = 'Chief Examination Controller';
+        roleStr = 'admin';
+        break;
+      case UserRole.finance:
+        userId = 'finance-001';
+        userName = 'Rajesh Varma (Finance Officer)';
+        roleStr = 'finance';
+        break;
+      case UserRole.auditor:
+        userId = 'auditor-001';
+        userName = 'Dr. K. Sharma (NTA Chief Observer)';
+        roleStr = 'auditor';
+        break;
+      case UserRole.invigilator:
+        userId = 'demo-inv-01';
+        userName = 'Prof. Anand Patel';
+        roleStr = 'invigilator';
+        break;
+      case UserRole.none:
+        state = AuthState();
+        return;
+    }
+
+    state = AuthState(
+      isLoading: false,
+      role: role,
+      userId: userId,
+      userName: userName,
+    );
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('role', roleStr);
+      await prefs.setString('userId', userId);
+      await prefs.setString('userName', userName);
+    } catch (_) {}
   }
 
   Future<void> login(String mobile, String password, bool isAdminLogin) async {
@@ -110,10 +178,25 @@ class AuthNotifier extends Notifier<AuthState> {
     final cleanMobile = mobile.trim();
     final cleanPassword = password.trim();
 
+    // Check for demo role keywords or offline test accounts
+    final lowerMobile = cleanMobile.toLowerCase();
+    if (lowerMobile == 'finance' || lowerMobile == 'finance@dutydesk.com') {
+      await loginAsDemoRole(UserRole.finance);
+      return;
+    }
+    if (lowerMobile == 'auditor' || lowerMobile == 'auditor@dutydesk.com' || lowerMobile == 'observer') {
+      await loginAsDemoRole(UserRole.auditor);
+      return;
+    }
+    if (lowerMobile == 'admin' && (cleanPassword == 'admin' || cleanPassword == 'admin123')) {
+      await loginAsDemoRole(UserRole.admin);
+      return;
+    }
+
     if (Firebase.apps.isEmpty) {
       state = state.copyWith(
         isLoading: false,
-        error: 'Firebase is not initialized. Please check internet connection or configuration.',
+        error: 'Firebase is not initialized. Use 1-Tap Demo Roles or check internet connection.',
       );
       return;
     }
@@ -127,17 +210,27 @@ class AuthNotifier extends Notifier<AuthState> {
           password: cleanPassword,
         );
         
+        UserRole targetRole = UserRole.admin;
+        String displayName = 'Admin User';
+        if (email.contains('finance') || email.contains('account')) {
+          targetRole = UserRole.finance;
+          displayName = 'Finance Officer';
+        } else if (email.contains('auditor') || email.contains('observer')) {
+          targetRole = UserRole.auditor;
+          displayName = 'Observer / Auditor';
+        }
+
         state = state.copyWith(
           isLoading: false,
-          role: UserRole.admin,
+          role: targetRole,
           userId: userCredential.user?.uid,
-          userName: 'Admin User',
+          userName: displayName,
         );
         
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('role', 'admin');
+        await prefs.setString('role', targetRole.name);
         await prefs.setString('userId', userCredential.user!.uid);
-        await prefs.setString('userName', 'Admin User');
+        await prefs.setString('userName', displayName);
       } else {
         // Invigilator Login: Verify against invigilators collection in Firestore
         final querySnapshot = await FirebaseFirestore.instance

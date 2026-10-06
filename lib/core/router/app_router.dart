@@ -21,6 +21,17 @@ import '../../features/notifications/presentation/notification_center_screen.dar
 import '../../features/admin/presentation/language_settings_screen.dart';
 import '../../features/admin/providers/center_provider.dart';
 import '../../features/admin/providers/invigilator_provider.dart';
+import '../../features/incidents/presentation/admin_incidents_screen.dart';
+import '../../features/centers/presentation/center_hierarchy_screen.dart';
+import '../../features/auditor/presentation/auditor_dashboard.dart';
+import '../../features/seating/presentation/seating_plan_screen.dart';
+import '../../features/dispatch/presentation/question_paper_tracker_screen.dart';
+import '../../features/answersheets/presentation/answer_sheet_collection_screen.dart';
+import '../../features/admin/presentation/bulk_import_screen.dart';
+import '../../features/audit_trail/presentation/audit_trail_screen.dart';
+import '../../features/roles/presentation/role_based_dashboard_screen.dart';
+import '../../features/cctv/presentation/cctv_monitor_screen.dart';
+import '../../features/portal/presentation/student_portal_screen.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
@@ -96,6 +107,13 @@ final GoRouter appRouter = GoRouter(
                 return AddCenterScreen(existingCenter: center);
               },
             ),
+            GoRoute(
+              path: 'details/:centerId',
+              builder: (context, state) {
+                final centerId = state.pathParameters['centerId']!;
+                return CenterHierarchyScreen(centerId: centerId);
+              },
+            ),
           ]
         ),
         GoRoute(
@@ -130,11 +148,81 @@ final GoRouter appRouter = GoRouter(
           path: 'global_search',
           builder: (context, state) => const GlobalSearchScreen(),
         ),
+        GoRoute(
+          path: 'incidents',
+          builder: (context, state) => const AdminIncidentsScreen(),
+        ),
+        GoRoute(
+          path: 'seating_plans',
+          builder: (context, state) => const SeatingPlanScreen(),
+        ),
+        GoRoute(
+          path: 'paper_dispatch',
+          builder: (context, state) => const QuestionPaperTrackerScreen(),
+        ),
+        GoRoute(
+          path: 'answer_sheets',
+          builder: (context, state) => const AnswerSheetCollectionScreen(),
+        ),
+        GoRoute(
+          path: 'bulk_import',
+          builder: (context, state) => const BulkImportScreen(),
+        ),
+        GoRoute(
+          path: 'audit_trail',
+          builder: (context, state) => const AuditTrailScreen(),
+        ),
+        GoRoute(
+          path: 'cctv',
+          builder: (context, state) => const CctvMonitorScreen(),
+        ),
+        GoRoute(
+          path: 'role/:role',
+          builder: (context, state) {
+            final role = state.pathParameters['role'] ?? 'coe';
+            return RoleBasedDashboardScreen(role: role);
+          },
+        ),
+        GoRoute(
+          path: 'student_portal',
+          builder: (context, state) => const StudentPortalScreen(),
+        ),
       ],
     ),
     GoRoute(
       path: '/invigilator_dashboard',
       builder: (context, state) => const InvigilatorDashboardScreen(),
+    ),
+    GoRoute(
+      path: '/auditor_dashboard',
+      builder: (context, state) => const AuditorDashboardScreen(),
+    ),
+    GoRoute(
+      path: '/paper_dispatch',
+      builder: (context, state) => const QuestionPaperTrackerScreen(),
+    ),
+    GoRoute(
+      path: '/answer_sheets',
+      builder: (context, state) => const AnswerSheetCollectionScreen(),
+    ),
+    GoRoute(
+      path: '/audit_trail',
+      builder: (context, state) => const AuditTrailScreen(),
+    ),
+    GoRoute(
+      path: '/cctv',
+      builder: (context, state) => const CctvMonitorScreen(),
+    ),
+    GoRoute(
+      path: '/role_dashboard/:role',
+      builder: (context, state) {
+        final role = state.pathParameters['role'] ?? 'coe';
+        return RoleBasedDashboardScreen(role: role);
+      },
+    ),
+    GoRoute(
+      path: '/portal',
+      builder: (context, state) => const StudentPortalScreen(),
     ),
   ],
 );

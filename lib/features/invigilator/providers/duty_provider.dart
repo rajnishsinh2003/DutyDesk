@@ -39,6 +39,21 @@ class ExamDuty {
   final double? distanceFromCenter;
   final bool? isGeofenceVerified;
   final String? geofenceStatus; // 'verified', 'outside', 'manual_requested', 'no_coords'
+  final bool isFaceVerified;
+  final double? faceMatchScore;
+  // Clock-Out fields
+  final bool isClockedOut;
+  final DateTime? clockedOutAt;
+  final String? clockOutTime;
+  final double? clockOutLatitude;
+  final double? clockOutLongitude;
+  final String? clockOutLocation;
+  final bool? clockOutGeofenceVerified;
+  final String? clockOutGeofenceStatus;
+  final double? clockOutDistanceFromCenter;
+  final String? noShowReason; // admin-set reason for no-show
+  final bool isStandbyReplacement; // true if this duty was auto-filled by standby
+  final String? replacedInvigilatorId; // original invigilator who was no-show
   final String paymentStatus; // 'pending', 'approved', 'paid'
   final DateTime? paidAt;
   final String? paymentReference;
@@ -72,6 +87,20 @@ class ExamDuty {
     this.distanceFromCenter,
     this.isGeofenceVerified,
     this.geofenceStatus,
+    this.isFaceVerified = false,
+    this.faceMatchScore,
+    this.isClockedOut = false,
+    this.clockedOutAt,
+    this.clockOutTime,
+    this.clockOutLatitude,
+    this.clockOutLongitude,
+    this.clockOutLocation,
+    this.clockOutGeofenceVerified,
+    this.clockOutGeofenceStatus,
+    this.clockOutDistanceFromCenter,
+    this.noShowReason,
+    this.isStandbyReplacement = false,
+    this.replacedInvigilatorId,
     this.paymentStatus = 'pending',
     this.paidAt,
     this.paymentReference,
@@ -109,6 +138,20 @@ class ExamDuty {
       distanceFromCenter: (data['distanceFromCenter'] as num?)?.toDouble(),
       isGeofenceVerified: data['isGeofenceVerified'],
       geofenceStatus: data['geofenceStatus'],
+      isFaceVerified: data['isFaceVerified'] ?? false,
+      faceMatchScore: (data['faceMatchScore'] as num?)?.toDouble(),
+      isClockedOut: data['isClockedOut'] ?? false,
+      clockedOutAt: (data['clockedOutAt'] as Timestamp?)?.toDate(),
+      clockOutTime: data['clockOutTime'],
+      clockOutLatitude: (data['clockOutLatitude'] as num?)?.toDouble(),
+      clockOutLongitude: (data['clockOutLongitude'] as num?)?.toDouble(),
+      clockOutLocation: data['clockOutLocation'],
+      clockOutGeofenceVerified: data['clockOutGeofenceVerified'],
+      clockOutGeofenceStatus: data['clockOutGeofenceStatus'],
+      clockOutDistanceFromCenter: (data['clockOutDistanceFromCenter'] as num?)?.toDouble(),
+      noShowReason: data['noShowReason'],
+      isStandbyReplacement: data['isStandbyReplacement'] ?? false,
+      replacedInvigilatorId: data['replacedInvigilatorId'],
       paymentStatus: data['paymentStatus'] ?? 'pending',
       paidAt: paidTimestamp?.toDate(),
       paymentReference: data['paymentReference'],
@@ -144,6 +187,20 @@ class ExamDuty {
     double? distanceFromCenter,
     bool? isGeofenceVerified,
     String? geofenceStatus,
+    bool? isFaceVerified,
+    double? faceMatchScore,
+    bool? isClockedOut,
+    DateTime? clockedOutAt,
+    String? clockOutTime,
+    double? clockOutLatitude,
+    double? clockOutLongitude,
+    String? clockOutLocation,
+    bool? clockOutGeofenceVerified,
+    String? clockOutGeofenceStatus,
+    double? clockOutDistanceFromCenter,
+    String? noShowReason,
+    bool? isStandbyReplacement,
+    String? replacedInvigilatorId,
     String? paymentStatus,
     DateTime? paidAt,
     String? paymentReference,
@@ -177,6 +234,20 @@ class ExamDuty {
       distanceFromCenter: distanceFromCenter ?? this.distanceFromCenter,
       isGeofenceVerified: isGeofenceVerified ?? this.isGeofenceVerified,
       geofenceStatus: geofenceStatus ?? this.geofenceStatus,
+      isFaceVerified: isFaceVerified ?? this.isFaceVerified,
+      faceMatchScore: faceMatchScore ?? this.faceMatchScore,
+      isClockedOut: isClockedOut ?? this.isClockedOut,
+      clockedOutAt: clockedOutAt ?? this.clockedOutAt,
+      clockOutTime: clockOutTime ?? this.clockOutTime,
+      clockOutLatitude: clockOutLatitude ?? this.clockOutLatitude,
+      clockOutLongitude: clockOutLongitude ?? this.clockOutLongitude,
+      clockOutLocation: clockOutLocation ?? this.clockOutLocation,
+      clockOutGeofenceVerified: clockOutGeofenceVerified ?? this.clockOutGeofenceVerified,
+      clockOutGeofenceStatus: clockOutGeofenceStatus ?? this.clockOutGeofenceStatus,
+      clockOutDistanceFromCenter: clockOutDistanceFromCenter ?? this.clockOutDistanceFromCenter,
+      noShowReason: noShowReason ?? this.noShowReason,
+      isStandbyReplacement: isStandbyReplacement ?? this.isStandbyReplacement,
+      replacedInvigilatorId: replacedInvigilatorId ?? this.replacedInvigilatorId,
       paymentStatus: paymentStatus ?? this.paymentStatus,
       paidAt: paidAt ?? this.paidAt,
       paymentReference: paymentReference ?? this.paymentReference,
@@ -231,6 +302,8 @@ class DutyArrivalResult {
   final double? distanceFromCenter;
   final bool? isGeofenceVerified;
   final String? geofenceStatus;
+  final bool isFaceVerified;
+  final double? faceMatchScore;
   final bool isOfflineSaved;
   final String? error;
 
@@ -247,6 +320,8 @@ class DutyArrivalResult {
     this.distanceFromCenter,
     this.isGeofenceVerified,
     this.geofenceStatus,
+    this.isFaceVerified = false,
+    this.faceMatchScore,
     this.isOfflineSaved = false,
     this.error,
   });
@@ -526,6 +601,8 @@ class DutyNotifier extends Notifier<List<ExamDuty>> {
     double? centerLng,
     int allowedRadiusMeters = 200,
     bool isManualOverride = false,
+    bool isFaceVerified = false,
+    double? faceMatchScore,
   }) async {
     final now = DateTime.now();
     final eval = evaluateArrival(now, excellentUntil: excellentUntil, goodUntil: goodUntil);
@@ -572,6 +649,8 @@ class DutyNotifier extends Notifier<List<ExamDuty>> {
         distanceFromCenter: distanceMeters,
         isGeofenceVerified: isVerified,
         geofenceStatus: geofenceStatus,
+        isFaceVerified: isFaceVerified,
+        faceMatchScore: faceMatchScore,
         timestamp: now.toIso8601String(),
       );
       await OfflineSyncService.saveOfflineArrival(offlineRecord);
@@ -589,6 +668,8 @@ class DutyNotifier extends Notifier<List<ExamDuty>> {
         distanceFromCenter: distanceMeters,
         isGeofenceVerified: isVerified,
         geofenceStatus: geofenceStatus,
+        isFaceVerified: isFaceVerified,
+        faceMatchScore: faceMatchScore,
         isOfflineSaved: true,
       );
     }
@@ -623,6 +704,8 @@ class DutyNotifier extends Notifier<List<ExamDuty>> {
           distanceFromCenter: (data['distanceFromCenter'] as num?)?.toDouble(),
           isGeofenceVerified: data['isGeofenceVerified'],
           geofenceStatus: data['geofenceStatus'],
+          isFaceVerified: data['isFaceVerified'] ?? isFaceVerified,
+          faceMatchScore: (data['faceMatchScore'] as num?)?.toDouble() ?? faceMatchScore,
         );
       }
 
@@ -640,6 +723,8 @@ class DutyNotifier extends Notifier<List<ExamDuty>> {
         'distanceFromCenter': distanceMeters,
         'isGeofenceVerified': isVerified,
         'geofenceStatus': geofenceStatus,
+        'isFaceVerified': isFaceVerified,
+        'faceMatchScore': faceMatchScore,
       });
 
       // Send alert notification to Admin if staff is late or outside geofence
@@ -675,6 +760,8 @@ class DutyNotifier extends Notifier<List<ExamDuty>> {
         distanceFromCenter: distanceMeters,
         isGeofenceVerified: isVerified,
         geofenceStatus: geofenceStatus,
+        isFaceVerified: isFaceVerified,
+        faceMatchScore: faceMatchScore,
       );
     } catch (e) {
       log('Error recording duty reached to Firestore: $e. Caching offline...');
@@ -693,6 +780,8 @@ class DutyNotifier extends Notifier<List<ExamDuty>> {
         distanceFromCenter: distanceMeters,
         isGeofenceVerified: isVerified,
         geofenceStatus: geofenceStatus,
+        isFaceVerified: isFaceVerified,
+        faceMatchScore: faceMatchScore,
         timestamp: now.toIso8601String(),
       );
       await OfflineSyncService.saveOfflineArrival(offlineRecord);
@@ -710,6 +799,8 @@ class DutyNotifier extends Notifier<List<ExamDuty>> {
         distanceFromCenter: distanceMeters,
         isGeofenceVerified: isVerified,
         geofenceStatus: geofenceStatus,
+        isFaceVerified: isFaceVerified,
+        faceMatchScore: faceMatchScore,
         isOfflineSaved: true,
       );
     }
@@ -1017,6 +1108,255 @@ class DutyNotifier extends Notifier<List<ExamDuty>> {
       await FirebaseFirestore.instance.collection('duties').doc(id).delete();
     } catch (e) {
       log('Error deleting duty: $e');
+    }
+  }
+
+  /// Records clock-out with GPS verification, geofence check, and admin notification.
+  Future<DutyArrivalResult> recordDutyClockOut({
+    required String dutyId,
+    required String invigilatorId,
+    double? centerLat,
+    double? centerLng,
+    int allowedRadiusMeters = 200,
+  }) async {
+    final now = DateTime.now();
+    final clockOutTimeStr = DateFormat('hh:mm a').format(now);
+
+    // 1. GPS Location capture
+    final loc = await LocationService.getCurrentLocation();
+    if (!loc.success || loc.latitude == null || loc.longitude == null) {
+      return DutyArrivalResult(
+        success: false,
+        performance: 'Unknown',
+        message: loc.errorMessage ?? 'Location is mandatory for clock-out. Please enable GPS.',
+        error: loc.errorMessage ?? 'Location required for clock-out.',
+        reachedTime: '',
+        reachedDate: '',
+      );
+    }
+
+    // 2. Geofence verification at clock-out
+    final geofence = LocationService.verifyGeofence(
+      staffLat: loc.latitude!,
+      staffLng: loc.longitude!,
+      centerLat: centerLat,
+      centerLng: centerLng,
+      allowedRadiusMeters: allowedRadiusMeters,
+    );
+
+    if (Firebase.apps.isEmpty) {
+      return DutyArrivalResult(
+        success: false,
+        performance: 'Unknown',
+        message: 'No internet connection. Clock-out requires online access.',
+        reachedTime: '',
+        reachedDate: '',
+        error: 'Offline clock-out not supported.',
+      );
+    }
+
+    try {
+      final docRef = FirebaseFirestore.instance.collection('duties').doc(dutyId);
+      final snapshot = await docRef.get();
+      if (!snapshot.exists) {
+        return DutyArrivalResult(
+          success: false,
+          performance: 'Unknown',
+          message: 'Duty record not found.',
+          reachedTime: '',
+          reachedDate: '',
+          error: 'Duty record not found.',
+        );
+      }
+
+      final data = snapshot.data()!;
+      if (data['isClockedOut'] == true) {
+        return DutyArrivalResult(
+          success: true,
+          performance: 'Already Clocked Out',
+          message: 'You have already clocked out at ${data['clockOutTime'] ?? 'unknown time'}.',
+          reachedTime: data['clockOutTime'] ?? '',
+          reachedDate: data['reachedDate'] ?? '',
+        );
+      }
+
+      if (data['isReached'] != true) {
+        return DutyArrivalResult(
+          success: false,
+          performance: 'Unknown',
+          message: 'You must clock in first before clocking out.',
+          reachedTime: '',
+          reachedDate: '',
+          error: 'Not clocked in yet.',
+        );
+      }
+
+      await docRef.update({
+        'isClockedOut': true,
+        'clockedOutAt': FieldValue.serverTimestamp(),
+        'clockOutTime': clockOutTimeStr,
+        'clockOutLatitude': loc.latitude,
+        'clockOutLongitude': loc.longitude,
+        'clockOutLocation': loc.locationString ?? 'Location unavailable',
+        'clockOutGeofenceVerified': geofence.isVerified,
+        'clockOutGeofenceStatus': geofence.status,
+        'clockOutDistanceFromCenter': geofence.distanceMeters,
+      });
+
+      // Notify admin if clock-out is outside geofence
+      if (geofence.status == 'outside') {
+        try {
+          final inv = ref.read(invigilatorProvider).firstWhere(
+            (i) => i.id == invigilatorId,
+            orElse: () => Invigilator(id: '', name: 'Staff', resourceId: '-', mobile: '', mockDutyCount: 0),
+          );
+          await ref.read(notificationProvider.notifier).sendNotification(
+            userId: 'admin',
+            title: '⚠️ Clock-Out Alert: ${inv.name}',
+            message: '${inv.name} clocked out outside geofence at $clockOutTimeStr (${geofence.formattedDistance} away).',
+            type: 'clockout_geofence_alert',
+            dutyId: dutyId,
+          );
+        } catch (_) {}
+      }
+
+      return DutyArrivalResult(
+        success: true,
+        performance: 'Clocked Out',
+        message: 'Successfully clocked out at $clockOutTimeStr.',
+        reachedTime: clockOutTimeStr,
+        reachedDate: DateFormat('yyyy-MM-dd').format(now),
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        locationString: loc.locationString,
+        mapsUrl: loc.mapsUrl,
+        distanceFromCenter: geofence.distanceMeters,
+        isGeofenceVerified: geofence.isVerified,
+        geofenceStatus: geofence.status,
+      );
+    } catch (e) {
+      log('Error recording clock-out: $e');
+      return DutyArrivalResult(
+        success: false,
+        performance: 'Unknown',
+        message: 'Failed to clock out: $e',
+        reachedTime: '',
+        reachedDate: '',
+        error: e.toString(),
+      );
+    }
+  }
+
+  /// Marks a duty as no-show by admin, with optional reason.
+  Future<void> markDutyNoShow(String dutyId, {String? reason}) async {
+    if (Firebase.apps.isEmpty) return;
+    try {
+      final docRef = FirebaseFirestore.instance.collection('duties').doc(dutyId);
+      await docRef.update({
+        'status': 'no_show',
+        'noShowReason': reason ?? 'Marked as no-show by admin',
+      });
+
+      final snapshot = await docRef.get();
+      final data = snapshot.data();
+      if (data != null) {
+        final invId = data['invigilatorId'] ?? '';
+        try {
+          await ref.read(notificationProvider.notifier).sendNotification(
+            userId: invId,
+            title: '❌ Duty Marked as No-Show',
+            message: 'Your duty for "${data['examName']}" on ${data['date']} has been marked as no-show.',
+            type: 'duty_no_show',
+            dutyId: dutyId,
+          );
+        } catch (_) {}
+      }
+    } catch (e) {
+      log('Error marking duty as no-show: $e');
+    }
+  }
+
+  /// Dispatches a standby staff member to replace a no-show duty.
+  Future<void> dispatchStandbyReplacement({
+    required String originalDutyId,
+    required String standbyInvigilatorId,
+  }) async {
+    if (Firebase.apps.isEmpty) return;
+    try {
+      final originalDoc = await FirebaseFirestore.instance.collection('duties').doc(originalDutyId).get();
+      if (!originalDoc.exists) return;
+      final data = originalDoc.data()!;
+
+      // Create a new duty for the standby staff
+      final newDutyRef = await FirebaseFirestore.instance.collection('duties').add({
+        'date': data['date'],
+        'examName': data['examName'],
+        'centerName': data['centerName'],
+        'invigilatorId': standbyInvigilatorId,
+        'status': 'accepted',
+        'payment': data['payment'] ?? getAutoPaymentForShift(data['shift'] ?? '1'),
+        'lunch': data['lunch'] ?? 'No',
+        'role': data['role'] ?? 'inv',
+        'shift': data['shift'] ?? '1',
+        'sessionId': data['sessionId'] ?? '',
+        'reportingTime': data['reportingTime'] ?? '05:00 AM',
+        'excellentUntil': data['excellentUntil'] ?? '06:20 AM',
+        'goodUntil': data['goodUntil'] ?? '06:30 AM',
+        'isReached': false,
+        'isClockedOut': false,
+        'isStandbyReplacement': true,
+        'replacedInvigilatorId': data['invigilatorId'],
+        'paymentStatus': 'pending',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      // Notify the standby staff
+      final inv = ref.read(invigilatorProvider).firstWhere(
+        (i) => i.id == standbyInvigilatorId,
+        orElse: () => Invigilator(id: '', name: 'Staff', resourceId: '-', mobile: '', mockDutyCount: 0),
+      );
+
+      try {
+        await ref.read(notificationProvider.notifier).sendNotification(
+          userId: standbyInvigilatorId,
+          title: '🚨 Emergency Standby Duty Assigned',
+          message: 'You are dispatched to replace a no-show for "${data['examName']}" at ${data['centerName']}. Report immediately.',
+          type: 'standby_dispatch',
+          dutyId: newDutyRef.id,
+        );
+      } catch (_) {}
+
+      // Email notification
+      if (inv.email != null && inv.email!.isNotEmpty) {
+        try {
+          await SmtpEmailService.sendEmail(
+            toAddress: inv.email!,
+            subject: '🚨 URGENT: Standby Duty Dispatch - ${data['examName']}',
+            bodyText: 'Hello ${inv.name},\n\n'
+                'You have been dispatched as STANDBY REPLACEMENT for a no-show staff member.\n\n'
+                'Duty Details:\n'
+                '- Exam: ${data['examName']}\n'
+                '- Center: ${data['centerName']}\n'
+                '- Date: ${data['date']}\n'
+                '- Shift: ${data['shift']}\n\n'
+                'Please report to the center IMMEDIATELY.\n\n'
+                'DutyDesk Control System',
+          );
+        } catch (_) {}
+      }
+
+      // Notify admin of successful dispatch
+      try {
+        await ref.read(notificationProvider.notifier).sendNotification(
+          userId: 'admin',
+          title: '✅ Standby Dispatched: ${inv.name}',
+          message: '${inv.name} has been dispatched to replace no-show at ${data['centerName']} for "${data['examName']}".',
+          type: 'standby_dispatched',
+          dutyId: newDutyRef.id,
+        );
+      } catch (_) {}
+    } catch (e) {
+      log('Error dispatching standby replacement: $e');
     }
   }
 }

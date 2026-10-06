@@ -431,5 +431,19 @@
   "clickDateToToggle": "अपनी छुट्टी को चिह्नित या हटाने के लिए किसी भी तिथि पर टैप करें।",
   "inactive": "निष्क्रिय",
   "invigilator": "निरीक्षक",
-  "labStaff": "लैब स्टाफ"
+  "labStaff": "लैब स्टाफ",
+  "clockOut": "क्लॉक आउट",
+  "clockedOut": "क्लॉक आउट हुआ",
+  "clockOutFromDuty": "ड्यूटी से क्लॉक आउट करें",
+  "dutyClockOut": "ड्यूटी क्लॉक-आउट",
+  "noShow": "अनुपस्थित (नो-शो)",
+  "markNoShow": "नो-शो चिह्नित करें",
+  "standbyStaff": "स्टैंडबाय स्टाफ",
+  "standbyPool": "स्टैंडबाय पूल",
+  "dispatchStandby": "स्टैंडबाय भेजें",
+  "tagAsStandby": "स्टैंडबाय के रूप में टैग करें",
+  "standbyReplacement": "स्टैंडबाय प्रतिस्थापन",
+  "incidentReport": "घटना रिपोर्ट",
+  "reportExamIncident": "परीक्षा घटना दर्ज करें",
+  "incidentLogs": "घटना लॉग"
 }

@@ -2510,6 +2510,90 @@ abstract class S {
   /// In en, this message translates to:
   /// **'Lab Staff'**
   String get labStaff;
+
+  /// No description provided for @clockOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Clock Out'**
+  String get clockOut;
+
+  /// No description provided for @clockedOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Clocked Out'**
+  String get clockedOut;
+
+  /// No description provided for @clockOutFromDuty.
+  ///
+  /// In en, this message translates to:
+  /// **'Clock Out from Duty'**
+  String get clockOutFromDuty;
+
+  /// No description provided for @dutyClockOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Duty Clock-Out'**
+  String get dutyClockOut;
+
+  /// No description provided for @noShow.
+  ///
+  /// In en, this message translates to:
+  /// **'No-Show'**
+  String get noShow;
+
+  /// No description provided for @markNoShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark No-Show'**
+  String get markNoShow;
+
+  /// No description provided for @standbyStaff.
+  ///
+  /// In en, this message translates to:
+  /// **'Standby Staff'**
+  String get standbyStaff;
+
+  /// No description provided for @standbyPool.
+  ///
+  /// In en, this message translates to:
+  /// **'Standby Pool'**
+  String get standbyPool;
+
+  /// No description provided for @dispatchStandby.
+  ///
+  /// In en, this message translates to:
+  /// **'Dispatch Standby'**
+  String get dispatchStandby;
+
+  /// No description provided for @tagAsStandby.
+  ///
+  /// In en, this message translates to:
+  /// **'Tag as Standby'**
+  String get tagAsStandby;
+
+  /// No description provided for @standbyReplacement.
+  ///
+  /// In en, this message translates to:
+  /// **'Standby Replacement'**
+  String get standbyReplacement;
+
+  /// No description provided for @incidentReport.
+  ///
+  /// In en, this message translates to:
+  /// **'Incident Report'**
+  String get incidentReport;
+
+  /// No description provided for @reportExamIncident.
+  ///
+  /// In en, this message translates to:
+  /// **'Report Exam Incident'**
+  String get reportExamIncident;
+
+  /// No description provided for @incidentLogs.
+  ///
+  /// In en, this message translates to:
+  /// **'Incident Logs'**
+  String get incidentLogs;
 }
 
 class _SDelegate extends LocalizationsDelegate<S> {

@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:duty_desk/l10n/app_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
 import 'core/providers/language_provider.dart';
+import 'core/services/fcm_push_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,6 +38,12 @@ void main() async {
     } catch (e) {
       debugPrint("Firebase Web initialization failed: $e");
     }
+  }
+
+  // 🔔 Initialize FCM Push Notifications
+  if (Firebase.apps.isNotEmpty) {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    await FcmPushService.initialize();
   }
 
   runApp(const ProviderScope(child: DutyDeskApp()));

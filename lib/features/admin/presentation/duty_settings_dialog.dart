@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:duty_desk/l10n/app_localizations.dart';
 import '../providers/duty_settings_provider.dart';
+import '../../../core/services/data_archival_service.dart';
 
 class DutySettingsDialog extends ConsumerStatefulWidget {
   const DutySettingsDialog({super.key});
@@ -23,6 +24,12 @@ class _DutySettingsDialogState extends ConsumerState<DutySettingsDialog> {
   late TextEditingController _shift1Ctrl;
   late TextEditingController _shift2Ctrl;
   late TextEditingController _shift3Ctrl;
+  late TextEditingController _taRateCtrl;
+  late TextEditingController _smsGatewayCtrl;
+  late TextEditingController _smsApiKeyCtrl;
+  late TextEditingController _whatsappGatewayCtrl;
+  late TextEditingController _whatsappApiKeyCtrl;
+  late TextEditingController _retentionDaysCtrl;
 
   bool _initialized = false;
   bool _isSaving = false;
@@ -35,6 +42,12 @@ class _DutySettingsDialogState extends ConsumerState<DutySettingsDialog> {
       _shift1Ctrl = TextEditingController(text: settings.shift1Amount.toString());
       _shift2Ctrl = TextEditingController(text: settings.shift2Amount.toString());
       _shift3Ctrl = TextEditingController(text: settings.shift3Amount.toString());
+      _taRateCtrl = TextEditingController(text: settings.travelAllowancePerKm.toString());
+      _smsGatewayCtrl = TextEditingController(text: settings.smsGatewayUrl);
+      _smsApiKeyCtrl = TextEditingController(text: settings.smsApiKey);
+      _whatsappGatewayCtrl = TextEditingController(text: settings.whatsappGatewayUrl);
+      _whatsappApiKeyCtrl = TextEditingController(text: settings.whatsappApiKey);
+      _retentionDaysCtrl = TextEditingController(text: settings.dataRetentionDays.toString());
       _initialized = true;
     }
   }
@@ -44,6 +57,12 @@ class _DutySettingsDialogState extends ConsumerState<DutySettingsDialog> {
     _shift1Ctrl.dispose();
     _shift2Ctrl.dispose();
     _shift3Ctrl.dispose();
+    _taRateCtrl.dispose();
+    _smsGatewayCtrl.dispose();
+    _smsApiKeyCtrl.dispose();
+    _whatsappGatewayCtrl.dispose();
+    _whatsappApiKeyCtrl.dispose();
+    _retentionDaysCtrl.dispose();
     super.dispose();
   }
 
@@ -313,6 +332,170 @@ class _DutySettingsDialogState extends ConsumerState<DutySettingsDialog> {
                 ],
               ),
             ),
+            const SizedBox(height: 20),
+
+            // 4. SMS GATEWAY CONFIGURATION
+            const Text(
+              '📨 SMS / WhatsApp Gateway',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF007A87)),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _smsGatewayCtrl,
+              decoration: InputDecoration(
+                labelText: 'SMS Gateway URL',
+                hintText: 'e.g. https://www.fast2sms.com/dev/bulkV2',
+                prefixIcon: const Icon(Icons.link, size: 18),
+                filled: true,
+                fillColor: isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _smsApiKeyCtrl,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: 'SMS API Key',
+                hintText: 'Your gateway API key / auth token',
+                prefixIcon: const Icon(Icons.key, size: 18),
+                filled: true,
+                fillColor: isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: settings.smsProvider,
+              decoration: InputDecoration(
+                labelText: 'SMS Provider',
+                prefixIcon: const Icon(Icons.business, size: 18),
+                filled: true,
+                fillColor: isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'generic', child: Text('Generic REST API')),
+                DropdownMenuItem(value: 'fast2sms', child: Text('Fast2SMS')),
+                DropdownMenuItem(value: 'msg91', child: Text('Msg91')),
+                DropdownMenuItem(value: 'textlocal', child: Text('Textlocal')),
+                DropdownMenuItem(value: 'twilio', child: Text('Twilio')),
+              ],
+              onChanged: (val) {
+                if (val != null) {
+                  ref.read(dutySettingsProvider.notifier).updateSettings(
+                    settings.copyWith(smsProvider: val),
+                  );
+                }
+              },
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _whatsappGatewayCtrl,
+              decoration: InputDecoration(
+                labelText: 'WhatsApp Gateway URL (Optional)',
+                hintText: 'e.g. https://graph.facebook.com/v17.0/PHONE_ID/messages',
+                prefixIcon: const Icon(Icons.chat, size: 18, color: Colors.green),
+                filled: true,
+                fillColor: isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _whatsappApiKeyCtrl,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: 'WhatsApp API Key (Optional)',
+                hintText: 'Bearer token for WhatsApp Business API',
+                prefixIcon: const Icon(Icons.vpn_key, size: 18, color: Colors.green),
+                filled: true,
+                fillColor: isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // 5. DATA RETENTION & ARCHIVAL
+            const Text(
+              '🗄️ Data Retention & Archival',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF007A87)),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _retentionDaysCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Retention Period (days)',
+                      hintText: 'e.g. 90',
+                      prefixIcon: const Icon(Icons.schedule, size: 18),
+                      filled: true,
+                      fillColor: isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.archive, size: 18),
+                  label: const Text('Run Archive', style: TextStyle(fontSize: 12)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () async {
+                    final days = int.tryParse(_retentionDaysCtrl.text.trim()) ?? 90;
+                    final messenger = ScaffoldMessenger.of(context);
+                    final preview = await DataArchivalService.previewArchival(retentionDays: days);
+                    if (!context.mounted) return;
+
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        title: const Text('Confirm Archival', style: TextStyle(fontWeight: FontWeight.bold)),
+                        content: Text(
+                          'This will archive:\n'
+                          '• ${preview.eligibleDuties} duties\n'
+                          '• ${preview.eligibleNotifications} notifications\n'
+                          '• ${preview.eligibleIncidents} incidents\n\n'
+                          'older than $days days. Data will be moved to archive collections.',
+                        ),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white),
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Archive Now'),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (confirmed == true) {
+                      final report = await DataArchivalService.runFullArchival(retentionDays: days);
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text('🗄️ Archived ${report.totalArchived} records successfully!'),
+                          backgroundColor: Colors.deepPurple,
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
             const SizedBox(height: 24),
 
             // Save Button
@@ -330,6 +513,11 @@ class _DutySettingsDialogState extends ConsumerState<DutySettingsDialog> {
                           shift1Amount: s1,
                           shift2Amount: s2,
                           shift3Amount: s3,
+                          smsGatewayUrl: _smsGatewayCtrl.text.trim(),
+                          smsApiKey: _smsApiKeyCtrl.text.trim(),
+                          whatsappGatewayUrl: _whatsappGatewayCtrl.text.trim(),
+                          whatsappApiKey: _whatsappApiKeyCtrl.text.trim(),
+                          dataRetentionDays: int.tryParse(_retentionDaysCtrl.text.trim()) ?? 90,
                         );
 
                         await ref.read(dutySettingsProvider.notifier).updateSettings(updated);

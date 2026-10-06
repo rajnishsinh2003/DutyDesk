@@ -7,6 +7,8 @@ import '../providers/exam_session_provider.dart';
 import '../providers/invigilator_provider.dart';
 import '../../invigilator/providers/duty_provider.dart';
 import '../providers/duty_settings_provider.dart';
+import '../providers/center_provider.dart';
+import '../services/allocation_engine.dart';
 
 class SessionAssignmentScreen extends ConsumerStatefulWidget {
   final String sessionId;
@@ -55,69 +57,923 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
     }
   }
 
-  void _runAutoAssignAlgorithm(
-    List<Invigilator> invs,
-    List<ExamDuty> globalDuties,
-    List<String> dates,
-    String shift,
-    int targetCount,
-  ) {
-    final activeInvs = invs.where((i) => i.isActive).toList();
 
-    final scoredInvs = activeInvs.map((inv) {
-      int score = inv.mockDutyCount;
+  Widget _buildFairnessCard(FairnessReport report) {
+    final isDeltaPositive = report.fairnessDelta >= 0;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF007A87).withValues(alpha: 0.12),
+            Colors.teal.withValues(alpha: 0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF007A87).withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.auto_graph, size: 18, color: Color(0xFF007A87)),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'Roster Workload Fairness',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isDeltaPositive ? Colors.green.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDeltaPositive ? Colors.green : Colors.orange,
+                    width: 0.8,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isDeltaPositive ? Icons.trending_up : Icons.trending_down,
+                      size: 14,
+                      color: isDeltaPositive ? Colors.green.shade800 : Colors.orange.shade800,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${isDeltaPositive ? "+" : ""}${report.fairnessDelta}% Fairness',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: isDeltaPositive ? Colors.green.shade800 : Colors.orange.shade800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Current Fairness',
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${report.currentFairnessScore}%',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      report.currentFairnessLabel,
+                      style: TextStyle(fontSize: 10, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward, size: 18, color: Color(0xFF007A87)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Projected Fairness',
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${report.projectedFairnessScore}%',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
+                    ),
+                    Text(
+                      report.projectedFairnessLabel,
+                      style: const TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: report.projectedFairnessScore / 100.0,
+              backgroundColor: Colors.grey.shade300,
+              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF007A87)),
+              minHeight: 6,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Min: ${report.minDuties} • Max: ${report.maxDuties} • Avg: ${report.averageDuties} duties',
+                style: TextStyle(fontSize: 10.5, color: Colors.grey.shade600),
+              ),
+              Text(
+                'Gini: ${report.projectedGini.toStringAsFixed(2)}',
+                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
-      final activeDutiesCount = globalDuties.where((d) => 
-        d.invigilatorId == inv.id && 
-        d.status.toLowerCase() != 'rejected'
-      ).length;
-      score += activeDutiesCount;
+  Widget _buildWeightSlider({
+    required String label,
+    required double value,
+    required ValueChanged<double> onChanged,
+    required String description,
+  }) {
+    final pct = (value * 100).round();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF007A87).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text('$pct%', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF007A87))),
+              ),
+            ],
+          ),
+          SliderTheme(
+            data: SliderThemeData(
+              activeTrackColor: const Color(0xFF007A87),
+              inactiveTrackColor: Colors.grey.shade300,
+              thumbColor: const Color(0xFF007A87),
+              overlayColor: const Color(0xFF007A87).withValues(alpha: 0.2),
+              trackHeight: 3.5,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+            ),
+            child: Slider(
+              value: value,
+              min: 0.0,
+              max: 1.0,
+              divisions: 20,
+              onChanged: onChanged,
+            ),
+          ),
+          Text(description, style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
+        ],
+      ),
+    );
+  }
 
-      bool hasConflict = false;
-      for (final dt in dates) {
-        if (inv.unavailableDates.contains(dt)) {
-          score += 100;
-          hasConflict = true;
-        }
-        if (globalDuties.any((d) =>
-            d.invigilatorId == inv.id &&
-            d.date == dt &&
-            d.shift == shift &&
-            d.status.toLowerCase() != 'rejected')) {
-          score += 100;
-          hasConflict = true;
-        }
-      }
+  Widget _buildCandidateCard(ScoredCandidate candidate, bool isSelected) {
+    final inv = candidate.invigilator;
+    final isEligible = candidate.isEligible;
 
-      return {
-        'id': inv.id,
-        'score': score,
-        'hasConflict': hasConflict,
-      };
-    }).toList();
-
-    scoredInvs.sort((a, b) => (a['score'] as int).compareTo(b['score'] as int));
-
-    final bestIds = scoredInvs
-        .where((item) => !(item['hasConflict'] as bool))
-        .take(targetCount)
-        .map((item) => item['id'] as String)
-        .toList();
-
-    if (bestIds.length < targetCount) {
-      final remainingNeeded = targetCount - bestIds.length;
-      final extraIds = scoredInvs
-          .where((item) => !bestIds.contains(item['id'] as String))
-          .take(remainingNeeded)
-          .map((item) => item['id'] as String)
-          .toList();
-      bestIds.addAll(extraIds);
+    Color badgeColor;
+    if (!isEligible) {
+      badgeColor = Colors.red;
+    } else if (candidate.totalScore >= 85) {
+      badgeColor = Colors.green;
+    } else if (candidate.totalScore >= 70) {
+      badgeColor = const Color(0xFF007A87);
+    } else {
+      badgeColor = Colors.orange;
     }
 
-    setState(() {
-      _selectedInvigilatorIds.clear();
-      _selectedInvigilatorIds.addAll(bestIds);
-    });
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: isSelected ? 2 : 0,
+      color: isSelected
+          ? const Color(0xFF007A87).withValues(alpha: 0.08)
+          : (isEligible ? Theme.of(context).cardColor : Colors.red.withValues(alpha: 0.04)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isSelected
+              ? const Color(0xFF007A87)
+              : (isEligible ? Colors.grey.shade300 : Colors.red.shade200),
+          width: isSelected ? 1.5 : 0.8,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 14,
+                  backgroundColor: badgeColor.withValues(alpha: 0.15),
+                  child: Text(
+                    inv.name.isNotEmpty ? inv.name[0].toUpperCase() : '?',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: badgeColor),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              inv.name,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: badgeColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: badgeColor, width: 0.8),
+                            ),
+                            child: Text(
+                              isEligible ? '${candidate.totalScore.toInt()}% • ${candidate.tier}' : 'Conflicted',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.bold,
+                                color: badgeColor,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        'ID: ${inv.resourceId} • ${inv.mobile}',
+                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                _buildFactorChip(
+                  icon: Icons.near_me_outlined,
+                  text: '${candidate.distanceKm ?? "--"} km',
+                  color: Colors.blue.shade700,
+                ),
+                _buildFactorChip(
+                  icon: Icons.assignment_outlined,
+                  text: '${candidate.currentDutyCount} duties',
+                  color: const Color(0xFF007A87),
+                ),
+                _buildFactorChip(
+                  icon: Icons.star_outline_rounded,
+                  text: '${candidate.punctualityScore.toInt()}% on-time',
+                  color: Colors.green.shade700,
+                ),
+                if (isSelected)
+                  _buildFactorChip(
+                    icon: Icons.check_circle,
+                    text: 'Recommended',
+                    color: Colors.green,
+                  ),
+              ],
+            ),
+            if (candidate.conflicts.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              ...candidate.conflicts.map((conflict) {
+                return Container(
+                  margin: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: conflict.isHardBlock ? Colors.red.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: conflict.isHardBlock ? Colors.red.shade300 : Colors.orange.shade300,
+                      width: 0.7,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        conflict.isHardBlock ? Icons.block : Icons.warning_amber_rounded,
+                        size: 14,
+                        color: conflict.isHardBlock ? Colors.red.shade700 : Colors.orange.shade800,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '${conflict.title}: ${conflict.description}',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            color: conflict.isHardBlock ? Colors.red.shade800 : Colors.orange.shade900,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFactorChip({
+    required IconData icon,
+    required String text,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.2), width: 0.7),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 3),
+          Text(
+            text,
+            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openIntelligentAllocationDialog({
+    required BuildContext context,
+    required ExamSession session,
+    required ExamCenter? center,
+    required List<Invigilator> invigilators,
+    required List<ExamDuty> globalDuties,
+    required List<String> dates,
+    required String shift,
+    required Function(List<String> selectedIds) onApply,
+  }) {
+    final activeInvs = invigilators.where((i) => i.isActive).toList();
+    if (activeInvs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No active invigilators available to allocate.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    int targetStaffCount = 2;
+    double workloadWeight = 0.35;
+    double distanceWeight = 0.25;
+    double punctualityWeight = 0.25;
+    double rotationWeight = 0.15;
+    bool showWeightSliders = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final weights = AllocationWeights(
+            workload: workloadWeight,
+            distance: distanceWeight,
+            punctuality: punctualityWeight,
+            rotation: rotationWeight,
+          );
+
+          final plan = AllocationEngine.generatePlan(
+            activeStaff: activeInvs,
+            globalDuties: globalDuties,
+            dates: dates,
+            shift: shift,
+            center: center,
+            targetCount: targetStaffCount,
+            weights: weights,
+          );
+
+          final report = plan.fairnessReport;
+
+          return Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.90,
+            ),
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  blurRadius: 20,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(top: 10, bottom: 6),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade400,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF007A87), Color(0xFF004D56)],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.auto_awesome, color: Colors.amberAccent, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Intelligent Duty Allocation',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              'Shift $shift • ${dates.length} Date(s) • ${session.examName}',
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(sheetContext),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildFairnessCard(report),
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Staff Requirement',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                  Text(
+                                    'Number of staff to allocate',
+                                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.remove_circle_outline, size: 22),
+                                    onPressed: targetStaffCount > 1
+                                        ? () => setModalState(() => targetStaffCount--)
+                                        : null,
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF007A87).withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: const Color(0xFF007A87), width: 1),
+                                    ),
+                                    child: Text(
+                                      '$targetStaffCount',
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF007A87),
+                                      ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.add_circle_outline, size: 22),
+                                    onPressed: targetStaffCount < activeInvs.length
+                                        ? () => setModalState(() => targetStaffCount++)
+                                        : null,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              InkWell(
+                                onTap: () => setModalState(() => showWeightSliders = !showWeightSliders),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.tune, size: 18, color: Color(0xFF007A87)),
+                                        const SizedBox(width: 8),
+                                        const Text(
+                                          'Allocation Factors & Weights',
+                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                        ),
+                                      ],
+                                    ),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          showWeightSliders ? 'Hide' : 'Configure',
+                                          style: const TextStyle(fontSize: 12, color: Color(0xFF007A87), fontWeight: FontWeight.w600),
+                                        ),
+                                        Icon(
+                                          showWeightSliders ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                                          size: 18,
+                                          color: const Color(0xFF007A87),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (showWeightSliders) ...[
+                                const SizedBox(height: 12),
+                                _buildWeightSlider(
+                                  label: '⚖️ Workload Balance',
+                                  value: workloadWeight,
+                                  onChanged: (v) => setModalState(() => workloadWeight = v),
+                                  description: 'Favors staff with lowest historical duty count',
+                                ),
+                                _buildWeightSlider(
+                                  label: '📍 Proximity / Distance',
+                                  value: distanceWeight,
+                                  onChanged: (v) => setModalState(() => distanceWeight = v),
+                                  description: 'Favors staff living closer to ${center?.name ?? "center"}',
+                                ),
+                                _buildWeightSlider(
+                                  label: '⭐ Punctuality & History',
+                                  value: punctualityWeight,
+                                  onChanged: (v) => setModalState(() => punctualityWeight = v),
+                                  description: 'Favors staff with consistent on-time duty arrivals',
+                                ),
+                                _buildWeightSlider(
+                                  label: '🔄 Rotation & Rest',
+                                  value: rotationWeight,
+                                  onChanged: (v) => setModalState(() => rotationWeight = v),
+                                  description: 'Ensures rest gap between consecutive duty sessions',
+                                ),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton.icon(
+                                    icon: const Icon(Icons.refresh, size: 14),
+                                    label: const Text('Reset Defaults', style: TextStyle(fontSize: 11)),
+                                    onPressed: () => setModalState(() {
+                                      workloadWeight = 0.35;
+                                      distanceWeight = 0.25;
+                                      punctualityWeight = 0.25;
+                                      rotationWeight = 0.15;
+                                    }),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'RANKED CANDIDATES (${plan.rankedCandidates.length})',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF007A87),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            Text(
+                              'Top $targetStaffCount Selected',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ...plan.rankedCandidates.map((candidate) {
+                          final isSelected = plan.selectedCandidates.contains(candidate);
+                          return _buildCandidateCard(candidate, isSelected);
+                        }),
+                      ],
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, -3),
+                      ),
+                    ],
+                  ),
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF007A87),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () {
+                      final selectedIds = plan.selectedCandidates.map((c) => c.invigilator.id).toList();
+                      onApply(selectedIds);
+                      Navigator.pop(sheetContext);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Applied AI allocation: ${selectedIds.length} staff selected! (Fairness: ${report.projectedFairnessScore}%)',
+                          ),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    },
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.check_circle_outline, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Apply Allocation (${plan.selectedCandidates.length} Staff Selected)',
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showFairnessAuditModal(
+    ExamSession session,
+    List<Invigilator> invigilators,
+    List<ExamDuty> globalDuties,
+  ) {
+    final activeInvs = invigilators.where((i) => i.isActive).toList();
+    if (activeInvs.isEmpty) return;
+
+    final staffDutyCounts = <String, int>{};
+    for (final staff in activeInvs) {
+      final activeDuties = globalDuties.where((d) =>
+          d.invigilatorId == staff.id &&
+          d.status.toLowerCase() != 'rejected').length;
+      staffDutyCounts[staff.id] = staff.mockDutyCount + activeDuties;
+    }
+
+    final countsList = staffDutyCounts.values.toList();
+    final report = AllocationEngine.generateFairnessReport(
+      currentDuties: countsList,
+      projectedDuties: countsList,
+    );
+
+    final underutilized = activeInvs.where((i) => (staffDutyCounts[i.id] ?? 0) <= 1).toList();
+    final balanced = activeInvs.where((i) {
+      final c = staffDutyCounts[i.id] ?? 0;
+      return c >= 2 && c <= 4;
+    }).toList();
+    final highLoad = activeInvs.where((i) => (staffDutyCounts[i.id] ?? 0) >= 5).toList();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 10, bottom: 6),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade400,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF007A87).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.balance, color: Color(0xFF007A87), size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Roster Workload & Fairness Audit',
+                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          'Institutional balance analysis & Gini distribution',
+                          style: TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildFairnessCard(report),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'STAFF WORKLOAD TIERS',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF007A87), letterSpacing: 0.5),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildLoadTierCard(
+                      title: '🟢 Underutilized Staff (0 - 1 Duties)',
+                      count: underutilized.length,
+                      color: Colors.green,
+                      staffList: underutilized,
+                      counts: staffDutyCounts,
+                      hint: 'Highest priority for upcoming duty allocations',
+                    ),
+                    const SizedBox(height: 10),
+                    _buildLoadTierCard(
+                      title: '🔵 Balanced Staff (2 - 4 Duties)',
+                      count: balanced.length,
+                      color: const Color(0xFF007A87),
+                      staffList: balanced,
+                      counts: staffDutyCounts,
+                      hint: 'Healthy workload distribution tier',
+                    ),
+                    const SizedBox(height: 10),
+                    _buildLoadTierCard(
+                      title: '🔴 Heavily Loaded Staff (5+ Duties)',
+                      count: highLoad.length,
+                      color: Colors.red,
+                      staffList: highLoad,
+                      counts: staffDutyCounts,
+                      hint: 'Rest recommended to prevent invigilator fatigue',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadTierCard({
+    required String title,
+    required int count,
+    required Color color,
+    required List<Invigilator> staffList,
+    required Map<String, int> counts,
+    required String hint,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: color)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text('$count Staff', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: color)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(hint, style: TextStyle(fontSize: 10.5, color: Colors.grey.shade600)),
+          if (staffList.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: staffList.take(6).map((staff) {
+                final dutyCount = counts[staff.id] ?? 0;
+                return Chip(
+                  label: Text('${staff.name} ($dutyCount)', style: const TextStyle(fontSize: 11)),
+                  backgroundColor: color.withValues(alpha: 0.1),
+                  side: BorderSide(color: color.withValues(alpha: 0.3), width: 0.8),
+                  visualDensity: VisualDensity.compact,
+                );
+              }).toList(),
+            ),
+            if (staffList.length > 6)
+              Padding(
+                padding: const EdgeInsets.only(top: 4.0),
+                child: Text('+${staffList.length - 6} more staff', style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
+              ),
+          ],
+        ],
+      ),
+    );
   }
 
   void _showAssignStaffModal(ExamSession session, List<Invigilator> invigilators, List<ExamDuty> globalDuties) {
@@ -145,6 +1001,12 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
         builder: (context, setModalState) {
           final activeInvs = invigilators.where((i) => i.isActive).toList();
           final dutySettings = ref.watch(dutySettingsProvider);
+          final centers = ref.watch(centerProvider);
+          final currentCenter = centers.where((c) => c.id == session.centerId).isNotEmpty
+              ? centers.firstWhere((c) => c.id == session.centerId)
+              : (centers.where((c) => c.name.toLowerCase() == session.centerName.toLowerCase()).isNotEmpty
+                  ? centers.firstWhere((c) => c.name.toLowerCase() == session.centerName.toLowerCase())
+                  : null);
 
           // Filter staff by dynamic search query (Name, Mobile, Resource ID)
           final filteredStaff = activeInvs.where((inv) {
@@ -179,13 +1041,56 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
                         s.selectInvigilators,
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
-                      TextButton.icon(
-                        icon: const Icon(Icons.auto_awesome, size: 16, color: Color(0xFF007A87)),
-                        label: Text(s.recommendedStaff, style: const TextStyle(color: Color(0xFF007A87), fontWeight: FontWeight.bold)),
-                        onPressed: () {
-                          _runAutoAssignAlgorithm(invigilators, globalDuties, _selectedDates, _selectedShift, 2);
-                          setModalState(() {});
+                      InkWell(
+                        onTap: () {
+                          _openIntelligentAllocationDialog(
+                            context: context,
+                            session: session,
+                            center: currentCenter,
+                            invigilators: invigilators,
+                            globalDuties: globalDuties,
+                            dates: _selectedDates,
+                            shift: _selectedShift,
+                            onApply: (selectedIds) {
+                              setModalState(() {
+                                _selectedInvigilatorIds.clear();
+                                _selectedInvigilatorIds.addAll(selectedIds);
+                              });
+                            },
+                          );
                         },
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF007A87), Color(0xFF004D56)],
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF007A87).withValues(alpha: 0.3),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.auto_awesome, size: 14, color: Colors.amberAccent),
+                              SizedBox(width: 5),
+                              Text(
+                                'AI Allocation',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -490,69 +1395,122 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
                               final inv = filteredStaff[idx];
                               final isSelected = _selectedInvigilatorIds.contains(inv.id);
 
-                              // Count total active duties
                               final staffActiveDutyCount = globalDuties.where((d) =>
                                   d.invigilatorId == inv.id &&
                                   d.status.toLowerCase() != 'rejected').length;
+                              final totalDuties = inv.mockDutyCount + staffActiveDutyCount;
 
-                              // Check conflict across any selected dates for the SELECTED SHIFT
-                              final conflictedDates = <String>[];
-                              for (final dt in _selectedDates) {
-                                final isUnavailable = inv.unavailableDates.contains(dt);
-                                final isBusyOnShift = globalDuties.any((d) =>
-                                    d.invigilatorId == inv.id &&
-                                    d.date == dt &&
-                                    d.shift == _selectedShift &&
-                                    d.status.toLowerCase() != 'rejected');
-                                if (isUnavailable || isBusyOnShift) {
-                                  conflictedDates.add(dt);
-                                }
-                              }
+                              final conflicts = AllocationEngine.detectConflicts(
+                                inv: inv,
+                                dates: _selectedDates,
+                                shift: _selectedShift,
+                                globalDuties: globalDuties,
+                              );
+                              final hasHardBlock = conflicts.any((c) => c.isHardBlock);
+                              final distanceKm = AllocationEngine.resolveDistanceKm(inv, currentCenter);
 
-                              String warningText = '';
-                              if (conflictedDates.isNotEmpty) {
-                                warningText = ' • ⚠️ ${conflictedDates.length} (${s.shift} $_selectedShift)';
-                              }
+                              final Color cardBg = isSelected
+                                  ? const Color(0xFF007A87).withValues(alpha: 0.08)
+                                  : (hasHardBlock ? Colors.red.withValues(alpha: 0.04) : Colors.transparent);
+                              final Color borderColor = isSelected
+                                  ? const Color(0xFF007A87)
+                                  : (hasHardBlock ? Colors.red.shade300 : Colors.grey.withValues(alpha: 0.3));
 
                               return Card(
                                 margin: const EdgeInsets.symmetric(vertical: 3, horizontal: 6),
                                 elevation: isSelected ? 1 : 0,
-                                color: isSelected ? const Color(0xFF007A87).withValues(alpha: 0.06) : Colors.transparent,
+                                color: cardBg,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
-                                  side: BorderSide(
-                                    color: isSelected ? const Color(0xFF007A87).withValues(alpha: 0.4) : Colors.transparent,
-                                    width: 1,
-                                  ),
+                                  side: BorderSide(color: borderColor, width: isSelected ? 1.2 : 0.8),
                                 ),
-                                child: CheckboxListTile(
-                                  value: isSelected,
-                                  dense: true,
-                                  activeColor: const Color(0xFF007A87),
-                                  title: Text(
-                                    inv.name,
-                                    style: TextStyle(
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                                      fontSize: 13.5,
-                                    ),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 2.0),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      CheckboxListTile(
+                                        value: isSelected,
+                                        dense: true,
+                                        activeColor: const Color(0xFF007A87),
+                                        title: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                inv.name,
+                                                style: TextStyle(
+                                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                                  fontSize: 13.5,
+                                                ),
+                                              ),
+                                            ),
+                                            Text(
+                                              '📍 $distanceKm km',
+                                              style: TextStyle(fontSize: 10.5, color: Colors.blue.shade700, fontWeight: FontWeight.w500),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              '⚖️ $totalDuties',
+                                              style: const TextStyle(fontSize: 10.5, color: Color(0xFF007A87), fontWeight: FontWeight.w600),
+                                            ),
+                                          ],
+                                        ),
+                                        subtitle: Text(
+                                          '${s.resourceId}: ${inv.resourceId} • ${inv.mobile}',
+                                          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                        ),
+                                        onChanged: (val) {
+                                          setModalState(() {
+                                            if (val == true) {
+                                              _selectedInvigilatorIds.add(inv.id);
+                                            } else {
+                                              _selectedInvigilatorIds.remove(inv.id);
+                                            }
+                                          });
+                                        },
+                                      ),
+                                      if (conflicts.isNotEmpty)
+                                        Padding(
+                                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                                          child: Wrap(
+                                            spacing: 4,
+                                            runSpacing: 4,
+                                            children: conflicts.map((c) {
+                                              return Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: c.isHardBlock ? Colors.red.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                  border: Border.all(
+                                                    color: c.isHardBlock ? Colors.red.shade300 : Colors.orange.shade300,
+                                                    width: 0.6,
+                                                  ),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      c.isHardBlock ? Icons.block : Icons.warning_amber_rounded,
+                                                      size: 11,
+                                                      color: c.isHardBlock ? Colors.red.shade700 : Colors.orange.shade800,
+                                                    ),
+                                                    const SizedBox(width: 3),
+                                                    Text(
+                                                      '${c.title} (${c.date})',
+                                                      style: TextStyle(
+                                                        fontSize: 9.5,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: c.isHardBlock ? Colors.red.shade800 : Colors.orange.shade900,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            }).toList(),
+                                          ),
+                                        ),
+                                    ],
                                   ),
-                                  subtitle: Text(
-                                    '${s.resourceId}: ${inv.resourceId} • ${inv.mobile} • ${s.totalDuties}: ${inv.mockDutyCount + staffActiveDutyCount}$warningText',
-                                    style: TextStyle(
-                                      color: conflictedDates.isNotEmpty ? Colors.red.shade700 : Colors.grey.shade700,
-                                      fontSize: 11,
-                                      fontWeight: conflictedDates.isNotEmpty ? FontWeight.w600 : FontWeight.normal,
-                                    ),
-                                  ),
-                                  onChanged: (val) {
-                                    setModalState(() {
-                                      if (val == true) {
-                                        _selectedInvigilatorIds.add(inv.id);
-                                      } else {
-                                        _selectedInvigilatorIds.remove(inv.id);
-                                      }
-                                    });
-                                  },
                                 ),
                               );
                             },
@@ -1236,11 +2194,18 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
     final activeInvs = invigilators.where((i) => i.isActive).toList();
     final globalDuties = ref.watch(globalDutyProvider);
     final dutySettings = ref.watch(dutySettingsProvider);
+    final centers = ref.watch(centerProvider);
 
     final session = sessions.firstWhere(
       (sessionItem) => sessionItem.id == widget.sessionId,
       orElse: () => ExamSession(id: '', examName: 'Unknown Exam', date: '', centerId: '', centerName: ''),
     );
+
+    final currentCenter = centers.where((c) => c.id == session.centerId).isNotEmpty
+        ? centers.firstWhere((c) => c.id == session.centerId)
+        : (centers.where((c) => c.name.toLowerCase() == session.centerName.toLowerCase()).isNotEmpty
+            ? centers.firstWhere((c) => c.name.toLowerCase() == session.centerName.toLowerCase())
+            : null);
 
     final sessionDuties = globalDuties.where((d) => d.sessionId == session.id || (session.id.isNotEmpty && d.examName == session.examName)).toList();
     final acceptedDuties = sessionDuties.where((d) => d.status.toLowerCase() == 'accepted').toList();
@@ -1249,6 +2214,34 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
     return Scaffold(
       appBar: AppBar(
         title: Text(session.examName, style: const TextStyle(fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.balance, color: Color(0xFF007A87)),
+            tooltip: 'Roster Fairness & Workload Audit',
+            onPressed: () => _showFairnessAuditModal(session, invigilators, globalDuties),
+          ),
+          IconButton(
+            icon: const Icon(Icons.auto_awesome, color: Color(0xFF007A87)),
+            tooltip: 'Intelligent AI Duty Allocation',
+            onPressed: () {
+              final defaultDate = [DateFormat('yyyy-MM-dd').format(DateTime.now())];
+              _openIntelligentAllocationDialog(
+                context: context,
+                session: session,
+                center: currentCenter,
+                invigilators: invigilators,
+                globalDuties: globalDuties,
+                dates: defaultDate,
+                shift: '1',
+                onApply: (selectedIds) {
+                  _selectedInvigilatorIds.clear();
+                  _selectedInvigilatorIds.addAll(selectedIds);
+                  _showAssignStaffModal(session, invigilators, globalDuties);
+                },
+              );
+            },
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAssignStaffModal(session, invigilators, globalDuties),

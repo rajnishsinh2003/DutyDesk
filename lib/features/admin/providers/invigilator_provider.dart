@@ -16,6 +16,12 @@ class Invigilator {
   final bool isActive;
   final List<String> unavailableDates;
   final String? photoUrl;
+  // Standby fields
+  final bool isStandby;
+  final String? standbyForDate; // yyyy-MM-dd
+  final String? standbyForCenter;
+  final double? latitude;
+  final double? longitude;
 
   Invigilator({
     required this.id,
@@ -29,6 +35,11 @@ class Invigilator {
     this.isActive = true,
     this.unavailableDates = const [],
     this.photoUrl,
+    this.isStandby = false,
+    this.standbyForDate,
+    this.standbyForCenter,
+    this.latitude,
+    this.longitude,
   });
 
   Invigilator copyWith({
@@ -43,6 +54,11 @@ class Invigilator {
     bool? isActive,
     List<String>? unavailableDates,
     String? photoUrl,
+    bool? isStandby,
+    String? standbyForDate,
+    String? standbyForCenter,
+    double? latitude,
+    double? longitude,
   }) {
     return Invigilator(
       id: id ?? this.id,
@@ -56,6 +72,11 @@ class Invigilator {
       isActive: isActive ?? this.isActive,
       unavailableDates: unavailableDates ?? this.unavailableDates,
       photoUrl: photoUrl ?? this.photoUrl,
+      isStandby: isStandby ?? this.isStandby,
+      standbyForDate: standbyForDate ?? this.standbyForDate,
+      standbyForCenter: standbyForCenter ?? this.standbyForCenter,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
     );
   }
 }
@@ -90,6 +111,11 @@ class InvigilatorNotifier extends Notifier<List<Invigilator>> {
           isActive: data['isActive'] ?? true,
           unavailableDates: datesRaw.map((e) => e.toString()).toList(),
           photoUrl: data['photoUrl'],
+          isStandby: data['isStandby'] ?? false,
+          standbyForDate: data['standbyForDate'],
+          standbyForCenter: data['standbyForCenter'],
+          latitude: (data['latitude'] as num?)?.toDouble(),
+          longitude: (data['longitude'] as num?)?.toDouble(),
         );
       }).toList();
     }, onError: (error) {
@@ -249,6 +275,34 @@ class InvigilatorNotifier extends Notifier<List<Invigilator>> {
       await FirebaseFirestore.instance.collection('invigilators').doc(id).delete();
     } catch (e) {
       // Handle error
+    }
+  }
+
+  /// Tags an invigilator as standby for a specific date and optionally a center.
+  Future<void> tagAsStandby(String id, String date, {String? centerName}) async {
+    if (Firebase.apps.isEmpty) return;
+    try {
+      await FirebaseFirestore.instance.collection('invigilators').doc(id).update({
+        'isStandby': true,
+        'standbyForDate': date,
+        'standbyForCenter': centerName,
+      });
+    } catch (e) {
+      log('Error tagging as standby: $e');
+    }
+  }
+
+  /// Removes standby tag from an invigilator.
+  Future<void> removeStandbyTag(String id) async {
+    if (Firebase.apps.isEmpty) return;
+    try {
+      await FirebaseFirestore.instance.collection('invigilators').doc(id).update({
+        'isStandby': false,
+        'standbyForDate': null,
+        'standbyForCenter': null,
+      });
+    } catch (e) {
+      log('Error removing standby tag: $e');
     }
   }
 }

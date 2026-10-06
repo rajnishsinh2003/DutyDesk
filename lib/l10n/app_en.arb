@@ -553,5 +553,19 @@
   "clickDateToToggle": "Tap any date to mark or unmark your leave/unavailability.",
   "inactive": "Inactive",
   "invigilator": "Invigilator",
-  "labStaff": "Lab Staff"
+  "labStaff": "Lab Staff",
+  "clockOut": "Clock Out",
+  "clockedOut": "Clocked Out",
+  "clockOutFromDuty": "Clock Out from Duty",
+  "dutyClockOut": "Duty Clock-Out",
+  "noShow": "No-Show",
+  "markNoShow": "Mark No-Show",
+  "standbyStaff": "Standby Staff",
+  "standbyPool": "Standby Pool",
+  "dispatchStandby": "Dispatch Standby",
+  "tagAsStandby": "Tag as Standby",
+  "standbyReplacement": "Standby Replacement",
+  "incidentReport": "Incident Report",
+  "reportExamIncident": "Report Exam Incident",
+  "incidentLogs": "Incident Logs"
 }

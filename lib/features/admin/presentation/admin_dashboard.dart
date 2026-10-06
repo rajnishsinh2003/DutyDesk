@@ -12,6 +12,11 @@ import '../services/report_service.dart';
 import 'duty_settings_dialog.dart';
 import '../../../core/services/location_service.dart';
 import '../../notifications/providers/notification_provider.dart';
+import '../../incidents/providers/incident_provider.dart';
+import 'gate_pass_scanner_dialog.dart';
+import 'whatsapp_dispatcher_dialog.dart';
+import 'standby_engine_dialog.dart';
+import '../../../core/services/standby_promotion_service.dart';
 
 class AdminDashboardScreen extends ConsumerStatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -23,6 +28,17 @@ class AdminDashboardScreen extends ConsumerStatefulWidget {
 class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   DateTimeRange? _selectedDateRange;
   bool _isExporting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final engine = ref.read(standbyEngineProvider);
+      if (!engine.isMonitoring) {
+        ref.read(standbyEngineProvider.notifier).startMonitoring();
+      }
+    });
+  }
 
   void _showExportModal(List<ExamDuty> duties, List<Invigilator> invs) {
     final s = S.of(context)!;
@@ -428,9 +444,41 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     });
   }
 
+  void _showAuditorReadOnlyNotice(BuildContext context, String actionName) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.shield_outlined, color: Color(0xFFD97706)),
+            SizedBox(width: 8),
+            Text('Observer Read-Only Mode', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          '$actionName is restricted for External Observers & Auditors. You have read-only privileges to audit center readiness, view incident reports, and monitor live attendance compliance.',
+          style: const TextStyle(fontSize: 13),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD97706), foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Understood'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = S.of(context)!;
+    final authState = ref.watch(authProvider);
+    final userRole = authState.role;
+    final isFinance = userRole == UserRole.finance;
+    final isAuditor = userRole == UserRole.auditor;
+
     final invs = ref.watch(invigilatorProvider);
     final centers = ref.watch(centerProvider);
     final duties = ref.watch(globalDutyProvider);
@@ -513,11 +561,41 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                               '👋',
                               style: TextStyle(fontSize: 14),
                             ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: isFinance
+                                    ? const Color(0xFF059669).withValues(alpha: 0.15)
+                                    : (isAuditor
+                                        ? const Color(0xFFD97706).withValues(alpha: 0.15)
+                                        : const Color(0xFF007A87).withValues(alpha: 0.15)),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: isFinance
+                                      ? const Color(0xFF059669)
+                                      : (isAuditor ? const Color(0xFFD97706) : const Color(0xFF007A87)),
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Text(
+                                isFinance ? 'Finance Officer' : (isAuditor ? 'Observer / Auditor' : 'Super Admin'),
+                                style: TextStyle(
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: isFinance
+                                      ? const Color(0xFF059669)
+                                      : (isAuditor ? const Color(0xFFD97706) : const Color(0xFF007A87)),
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          s.adminDashboard,
+                          isFinance
+                              ? 'Finance & Payroll'
+                              : (isAuditor ? 'Audit & Compliance' : s.adminDashboard),
                           style: TextStyle(
                             color: textColor,
                             fontSize: 28,
@@ -603,6 +681,107 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                   ),
                 ],
               ),
+
+              // ROLE CONTEXT BANNER (Finance Officer / Auditor Observer)
+              if (isFinance) ...[
+                Container(
+                  margin: const EdgeInsets.only(top: 14),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF059669).withValues(alpha: isDarkMode ? 0.2 : 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF059669).withValues(alpha: 0.4), width: 1.2),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF059669).withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.account_balance_wallet, color: Color(0xFF059669), size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Finance & Remuneration Portal',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF059669)),
+                            ),
+                            Text(
+                              'Logged in as Finance Officer. Manage payroll, approve payout disbursements, and configure TA/DA rates.',
+                              style: TextStyle(fontSize: 11, color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF059669),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () => context.push('/admin_dashboard/payroll'),
+                        child: const Text('Open Payroll', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else if (isAuditor) ...[
+                Container(
+                  margin: const EdgeInsets.only(top: 14),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD97706).withValues(alpha: isDarkMode ? 0.2 : 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFD97706).withValues(alpha: 0.4), width: 1.2),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD97706).withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.verified, color: Color(0xFFD97706), size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Statutory Observer Mode (Read-Only)',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFFD97706)),
+                            ),
+                            Text(
+                              'Logged in as NTA Observer / Auditor. View center readiness certificates, incident logs, and attendance compliance.',
+                              style: TextStyle(fontSize: 11, color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFD97706),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () => context.push('/admin_dashboard/reports'),
+                        child: const Text('Reports', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 20),
 
               // GLOBAL SEARCH BAR
@@ -734,6 +913,70 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                 ),
               ),
               const SizedBox(height: 20),
+
+              // ACTIVE CRITICAL INCIDENTS BANNER
+              Consumer(
+                builder: (context, refConsumer, _) {
+                  final allIncidents = refConsumer.watch(incidentProvider);
+                  final openCritical = allIncidents.where((i) => i.severity == 'critical' && i.status != 'resolved').toList();
+                  if (openCritical.isEmpty) return const SizedBox.shrink();
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 20),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFDC2626), Color(0xFF991B1B)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.red.withValues(alpha: 0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.crisis_alert_rounded, color: Colors.white, size: 28),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '🚨 ${openCritical.length} CRITICAL INCIDENT${openCritical.length > 1 ? "S" : ""} ACTIVE',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.8),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${openCritical.first.title} at ${openCritical.first.centerName} (Room ${openCritical.first.room})',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: Colors.white70, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: const Color(0xFF991B1B),
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: () => context.push('/admin_dashboard/incidents'),
+                          child: const Text('ACT NOW', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
 
               // DUTY CONFLICT DETECTOR PANEL
               if (activeConflicts.isNotEmpty) ...[
@@ -1207,10 +1450,12 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                   ),
                   _ActionCard(
                     title: s.assignDuty,
-                    subtitle: s.shift,
+                    subtitle: isAuditor ? 'Read-Only (Observer)' : s.shift,
                     icon: Icons.assignment_rounded,
-                    iconColor: const Color(0xFF047857),
-                    onTap: () => context.go('/admin_dashboard/allocate_duty'),
+                    iconColor: isAuditor ? Colors.grey : const Color(0xFF047857),
+                    onTap: isAuditor
+                        ? () => _showAuditorReadOnlyNotice(context, s.assignDuty)
+                        : () => context.go('/admin_dashboard/allocate_duty'),
                   ),
                   _ActionCard(
                     title: s.dutySettings,
@@ -1246,6 +1491,96 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                     icon: Icons.edit_document,
                     iconColor: const Color(0xFFEAB308),
                     onTap: () => context.go('/admin_dashboard/maintain_data'),
+                  ),
+                  Consumer(
+                    builder: (context, refConsumer, _) {
+                      final allIncidents = refConsumer.watch(incidentProvider);
+                      final openIncidentsCount = allIncidents.where((i) => i.status == 'open').length;
+                      return _ActionCard(
+                        title: 'Incident Logs',
+                        subtitle: openIncidentsCount > 0 ? '$openIncidentsCount Open Issues' : 'All Clear',
+                        icon: Icons.report_problem_rounded,
+                        iconColor: openIncidentsCount > 0 ? const Color(0xFFDC2626) : const Color(0xFF007A87),
+                        onTap: () => context.push('/admin_dashboard/incidents'),
+                      );
+                    },
+                  ),
+                  _ActionCard(
+                    title: 'Gate Scanner',
+                    subtitle: 'QR / Badge Verification',
+                    icon: Icons.qr_code_scanner_rounded,
+                    iconColor: const Color(0xFF0891B2),
+                    onTap: () => GatePassScannerDialog.show(context),
+                  ),
+                  _ActionCard(
+                    title: 'WhatsApp Hub',
+                    subtitle: 'Broadcast & Webhooks',
+                    icon: Icons.chat_bubble_outline_rounded,
+                    iconColor: const Color(0xFF25D366),
+                    onTap: () => WhatsAppDispatcherDialog.show(context),
+                  ),
+                  _ActionCard(
+                    title: 'Standby Pool',
+                    subtitle: 'Auto-Promotion Engine',
+                    icon: Icons.supervised_user_circle_rounded,
+                    iconColor: const Color(0xFFF59E0B),
+                    onTap: () => StandbyEngineDialog.show(context),
+                  ),
+                  _ActionCard(
+                    title: 'Seating Plans',
+                    subtitle: 'Grid Layout & PDF Notice',
+                    icon: Icons.grid_on_rounded,
+                    iconColor: const Color(0xFF6366F1),
+                    onTap: () => context.go('/admin_dashboard/seating_plans'),
+                  ),
+                  _ActionCard(
+                    title: 'Paper Dispatch',
+                    subtitle: 'Chain of Custody & Vault',
+                    icon: Icons.markunread_mailbox_rounded,
+                    iconColor: const Color(0xFF0D9488),
+                    onTap: () => context.go('/admin_dashboard/paper_dispatch'),
+                  ),
+                  _ActionCard(
+                    title: 'Answer Scripts',
+                    subtitle: 'Reconciliation & Bundles',
+                    icon: Icons.inventory_2_rounded,
+                    iconColor: const Color(0xFF10B981),
+                    onTap: () => context.go('/admin_dashboard/answer_sheets'),
+                  ),
+                  _ActionCard(
+                    title: 'Bulk Import',
+                    subtitle: 'Excel & CSV Data Loader',
+                    icon: Icons.upload_file_rounded,
+                    iconColor: const Color(0xFF0284C7),
+                    onTap: () => context.go('/admin_dashboard/bulk_import'),
+                  ),
+                  _ActionCard(
+                    title: 'Audit Trail',
+                    subtitle: 'Immutable Activity Log',
+                    icon: Icons.history_rounded,
+                    iconColor: const Color(0xFF7C3AED),
+                    onTap: () => context.go('/admin_dashboard/audit_trail'),
+                  ),
+                  _ActionCard(
+                    title: 'CCTV Feeds',
+                    subtitle: 'Surveillance Monitor',
+                    icon: Icons.videocam_rounded,
+                    iconColor: const Color(0xFF0D9488),
+                    onTap: () => context.go('/admin_dashboard/cctv'),
+                  ),
+                  _ActionCard(
+                    title: 'Role Dashboards',
+                    subtitle: 'COE, Flying Squad, Dean',
+                    icon: Icons.dashboard_customize_rounded,
+                    iconColor: const Color(0xFFF59E0B),
+                    onTap: () => _showRoleSelectorDialog(context),
+                  ),
+                  _ActionCard(
+                    title: 'Student Portal',
+                    subtitle: 'Candidate Exam View',
+                    icon: Icons.school_rounded,
+                    iconColor: const Color(0xFF007A87),
+                    onTap: () => context.go('/admin_dashboard/student_portal'),
                   ),
                 ],
               ),
@@ -1533,6 +1868,70 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
             child: Text(s.logout),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showRoleSelectorDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Select Specialized Dashboard',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 14),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0x1F7C3AED),
+                  child: Icon(Icons.gavel_rounded, color: Color(0xFF7C3AED)),
+                ),
+                title: const Text('Controller of Examinations (COE)'),
+                subtitle: const Text('Executive compliance & reporting'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push('/admin_dashboard/role/coe');
+                },
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0x1FDC2626),
+                  child: Icon(Icons.verified_user_rounded, color: Color(0xFFDC2626)),
+                ),
+                title: const Text('Flying Squad / Vigilance Inspector'),
+                subtitle: const Text('Surprise inspections & incident filing'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push('/admin_dashboard/role/flying_squad');
+                },
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0x1F1E40AF),
+                  child: Icon(Icons.school_rounded, color: Color(0xFF1E40AF)),
+                ),
+                title: const Text('Dean / Principal View'),
+                subtitle: const Text('Institutional operational summary'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push('/admin_dashboard/role/dean');
+                },
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

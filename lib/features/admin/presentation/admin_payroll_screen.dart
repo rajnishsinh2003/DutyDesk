@@ -8,6 +8,8 @@ import 'package:duty_desk/l10n/app_localizations.dart';
 import '../../invigilator/providers/duty_provider.dart';
 import '../providers/invigilator_provider.dart';
 import '../providers/center_provider.dart';
+import '../providers/duty_settings_provider.dart';
+import 'dart:math' as math;
 
 class AdminPayrollScreen extends ConsumerStatefulWidget {
   const AdminPayrollScreen({super.key});
@@ -33,6 +35,37 @@ class _AdminPayrollScreenState extends ConsumerState<AdminPayrollScreen> with Si
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// Haversine formula to compute distance (km) between two GPS coordinates.
+  double _haversineDistance(double lat1, double lon1, double lat2, double lon2) {
+    const double earthRadius = 6371.0; // km
+    final dLat = _toRadians(lat2 - lat1);
+    final dLon = _toRadians(lon2 - lon1);
+    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_toRadians(lat1)) * math.cos(_toRadians(lat2)) *
+        math.sin(dLon / 2) * math.sin(dLon / 2);
+    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    return earthRadius * c;
+  }
+
+  double _toRadians(double degrees) => degrees * math.pi / 180.0;
+
+  /// Calculate travel allowance for a duty based on staff and center GPS.
+  int _computeTravelAllowance(Invigilator staff, ExamDuty duty, List<ExamCenter> centers, DutySettings settings) {
+    if (!settings.enableTravelAllowance || settings.travelAllowancePerKm <= 0) return 0;
+    if (staff.latitude == null || staff.longitude == null) return 0;
+
+    final center = centers.where((c) => c.name == duty.centerName).firstOrNull;
+    if (center == null || center.latitude == null || center.longitude == null) return 0;
+
+    final distanceKm = _haversineDistance(
+      staff.latitude!, staff.longitude!,
+      center.latitude!, center.longitude!,
+    );
+
+    // Round-trip distance × rate per km
+    return (distanceKm * 2 * settings.travelAllowancePerKm).round();
   }
 
   void _showPaymentStatusDialog(ExamDuty duty) {
@@ -193,6 +226,7 @@ class _AdminPayrollScreenState extends ConsumerState<AdminPayrollScreen> with Si
     final duties = ref.watch(globalDutyProvider);
     final invs = ref.watch(invigilatorProvider);
     final centers = ref.watch(centerProvider);
+    final dutySettings = ref.watch(dutySettingsProvider);
 
     final monthPrefix = DateFormat('yyyy-MM').format(_selectedMonth);
     final monthDuties = duties.where((d) => d.date.startsWith(monthPrefix)).toList();
@@ -202,16 +236,23 @@ class _AdminPayrollScreenState extends ConsumerState<AdminPayrollScreen> with Si
     int approvedRemuneration = 0;
     int paidRemuneration = 0;
     int pendingRemuneration = 0;
+    int totalTravelAllowance = 0;
 
     for (final d in monthDuties) {
       final amount = d.parsedPaymentAmount;
-      totalRemuneration += amount;
+      final staff = invs.firstWhere(
+        (i) => i.id == d.invigilatorId,
+        orElse: () => Invigilator(id: '', name: '', resourceId: '', mobile: '', mockDutyCount: 0),
+      );
+      final ta = _computeTravelAllowance(staff, d, centers, dutySettings);
+      totalRemuneration += amount + ta;
+      totalTravelAllowance += ta;
       if (d.paymentStatus == 'paid') {
-        paidRemuneration += amount;
+        paidRemuneration += amount + ta;
       } else if (d.paymentStatus == 'approved') {
-        approvedRemuneration += amount;
+        approvedRemuneration += amount + ta;
       } else {
-        pendingRemuneration += amount;
+        pendingRemuneration += amount + ta;
       }
     }
 
@@ -302,6 +343,31 @@ class _AdminPayrollScreenState extends ConsumerState<AdminPayrollScreen> with Si
               ],
             ),
           ),
+          if (dutySettings.enableTravelAllowance && totalTravelAllowance > 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.indigo.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.indigo.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.directions_car, color: Colors.indigo.shade600, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Travel Allowance (TA/DA): ₹$totalTravelAllowance included (₹${dutySettings.travelAllowancePerKm}/km round-trip)',
+                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Colors.indigo.shade700),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          const SizedBox(height: 4),
 
           // Search & Filter Row
           Padding(
@@ -356,10 +422,10 @@ class _AdminPayrollScreenState extends ConsumerState<AdminPayrollScreen> with Si
               controller: _tabController,
               children: [
                 // TAB 1: Detailed Duty Payments List
-                _buildDetailedDutyList(filteredDuties, invs, s),
+                _buildDetailedDutyList(filteredDuties, invs, s, centers, dutySettings),
 
                 // TAB 2: Staff-Wise Summary List
-                _buildStaffSummaryList(staffDutyMap, invs, s),
+                _buildStaffSummaryList(staffDutyMap, invs, s, centers, dutySettings),
               ],
             ),
           ),
@@ -386,7 +452,7 @@ class _AdminPayrollScreenState extends ConsumerState<AdminPayrollScreen> with Si
     );
   }
 
-  Widget _buildDetailedDutyList(List<ExamDuty> duties, List<Invigilator> invs, S s) {
+  Widget _buildDetailedDutyList(List<ExamDuty> duties, List<Invigilator> invs, S s, List<ExamCenter> centers, DutySettings settings) {
     if (duties.isEmpty) {
       return Center(child: Text(s.noDataFound));
     }
@@ -400,6 +466,7 @@ class _AdminPayrollScreenState extends ConsumerState<AdminPayrollScreen> with Si
           (i) => i.id == duty.invigilatorId,
           orElse: () => Invigilator(id: '', name: 'Staff', resourceId: '-', mobile: '', mockDutyCount: 0),
         );
+        final ta = _computeTravelAllowance(staff, duty, centers, settings);
 
         Color badgeColor = Colors.orange;
         String statusText = s.pending;
@@ -436,6 +503,20 @@ class _AdminPayrollScreenState extends ConsumerState<AdminPayrollScreen> with Si
                       Row(
                         children: [
                           Text('${s.shift} ${duty.shift} • ${duty.centerName}', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                          if (ta > 0) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: Colors.indigo.shade50,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                'TA: ₹$ta',
+                                style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.indigo.shade700),
+                              ),
+                            ),
+                          ],
                           const Spacer(),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -472,7 +553,7 @@ class _AdminPayrollScreenState extends ConsumerState<AdminPayrollScreen> with Si
     );
   }
 
-  Widget _buildStaffSummaryList(Map<String, List<ExamDuty>> staffDutyMap, List<Invigilator> invs, S s) {
+  Widget _buildStaffSummaryList(Map<String, List<ExamDuty>> staffDutyMap, List<Invigilator> invs, S s, List<ExamCenter> centers, DutySettings settings) {
     if (staffDutyMap.isEmpty) {
       return Center(child: Text(s.noDataFound));
     }
@@ -494,14 +575,17 @@ class _AdminPayrollScreenState extends ConsumerState<AdminPayrollScreen> with Si
         int paid = 0;
         int pending = 0;
         int completedCount = 0;
+        int staffTa = 0;
 
         for (final d in staffDuties) {
           final amt = d.parsedPaymentAmount;
-          totalEarned += amt;
+          final ta = _computeTravelAllowance(staff, d, centers, settings);
+          totalEarned += amt + ta;
+          staffTa += ta;
           if (d.paymentStatus == 'paid') {
-            paid += amt;
+            paid += amt + ta;
           } else {
-            pending += amt;
+            pending += amt + ta;
           }
           if (d.isReached) completedCount++;
         }
@@ -529,6 +613,20 @@ class _AdminPayrollScreenState extends ConsumerState<AdminPayrollScreen> with Si
                     Text('₹$totalEarned', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF007A87))),
                   ],
                 ),
+                if (staffTa > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.directions_car, size: 14, color: Colors.indigo.shade400),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Incl. TA: ₹$staffTa',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.indigo.shade600),
+                        ),
+                      ],
+                    ),
+                  ),
                 const Divider(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,

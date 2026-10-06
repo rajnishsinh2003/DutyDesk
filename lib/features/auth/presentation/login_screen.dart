@@ -80,6 +80,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         );
       } else if (next.role == UserRole.admin) {
         context.go('/admin_dashboard');
+      } else if (next.role == UserRole.auditor) {
+        context.go('/auditor_dashboard');
+      } else if (next.role == UserRole.finance) {
+        context.go('/admin_dashboard/payroll');
       } else if (next.role == UserRole.invigilator) {
         context.go('/invigilator_dashboard');
       }
@@ -420,6 +424,63 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: 20),
 
+                    // 2.5 QUICK DEMO ROLE SELECTOR (1-Click Evaluation for all 4 RBAC Roles)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: cardBgColor,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: cardBorderColor),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.security, size: 16, color: brandColor),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Role-Based Access Control (1-Tap Demo)',
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: primaryTextColor),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _demoRoleChip(
+                                label: 'Admin',
+                                icon: Icons.admin_panel_settings,
+                                color: const Color(0xFF007A87),
+                                role: UserRole.admin,
+                              ),
+                              _demoRoleChip(
+                                label: 'Finance Officer',
+                                icon: Icons.payments_outlined,
+                                color: const Color(0xFF059669),
+                                role: UserRole.finance,
+                              ),
+                              _demoRoleChip(
+                                label: 'Auditor / Observer',
+                                icon: Icons.visibility_outlined,
+                                color: const Color(0xFFD97706),
+                                role: UserRole.auditor,
+                              ),
+                              _demoRoleChip(
+                                label: 'Invigilator',
+                                icon: Icons.badge_outlined,
+                                color: const Color(0xFF6366F1),
+                                role: UserRole.invigilator,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
                     // 3. HELPER FOOTER BANNER
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -459,9 +520,57 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 8),
+
+                    // STUDENT & PARENT EXAMINATION PORTAL ACCESS
+                    TextButton.icon(
+                      onPressed: () => context.push('/portal'),
+                      icon: const Icon(Icons.school_rounded, size: 16, color: Color(0xFF007A87)),
+                      label: const Text(
+                        'Student & Parent Exam Portal (Read-Only)',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF007A87),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _demoRoleChip({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required UserRole role,
+  }) {
+    return InkWell(
+      onTap: () {
+        ref.read(authProvider.notifier).loginAsDemoRole(role);
+      },
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: color),
             ),
           ],
         ),

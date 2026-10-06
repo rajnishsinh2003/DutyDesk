@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:duty_desk/l10n/app_localizations.dart';
 import '../providers/invigilator_provider.dart';
 import '../../invigilator/providers/duty_provider.dart';
@@ -26,6 +29,27 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
   DateTimeRange? _selectedDateRange;
 
   bool _isExporting = false;
+
+  // Custom Report Builder - column selection state
+  final List<ReportColumn> _allColumns = [
+    ReportColumn(id: 'staffName', label: 'Staff Name', enabled: true),
+    ReportColumn(id: 'resourceId', label: 'Resource ID', enabled: true),
+    ReportColumn(id: 'mobile', label: 'Mobile', enabled: true),
+    ReportColumn(id: 'email', label: 'Email', enabled: false),
+    ReportColumn(id: 'examName', label: 'Exam Name', enabled: true),
+    ReportColumn(id: 'date', label: 'Date', enabled: true),
+    ReportColumn(id: 'shift', label: 'Shift', enabled: true),
+    ReportColumn(id: 'center', label: 'Center', enabled: true),
+    ReportColumn(id: 'status', label: 'Status', enabled: true),
+    ReportColumn(id: 'payment', label: 'Payment', enabled: true),
+    ReportColumn(id: 'paymentStatus', label: 'Payment Status', enabled: false),
+    ReportColumn(id: 'arrivalTime', label: 'Arrival Time', enabled: false),
+    ReportColumn(id: 'arrivalPerformance', label: 'Punctuality', enabled: false),
+    ReportColumn(id: 'gpsLocation', label: 'GPS Location', enabled: false),
+    ReportColumn(id: 'clockOutTime', label: 'Clock-Out Time', enabled: false),
+    ReportColumn(id: 'geofenceStatus', label: 'Geofence Status', enabled: false),
+    ReportColumn(id: 'faceVerification', label: 'Face Verification', enabled: false),
+  ];
 
   @override
   void initState() {
@@ -124,11 +148,224 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
                 }
               },
             ),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.tune_outlined),
+              label: Text('Export Custom CSV (${_allColumns.where((c) => c.enabled).length} Cols)'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF007A87),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () async {
+                Navigator.pop(context);
+                await _exportCustomCsv(filteredDuties, invigilators, filterDesc);
+              },
+            ),
             const SizedBox(height: 8),
           ],
         ),
       ),
     );
+  }
+
+  void _showColumnBuilderModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Container(
+          padding: const EdgeInsets.all(20),
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.75),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.view_column, color: Color(0xFF007A87), size: 24),
+                      SizedBox(width: 8),
+                      Text('Custom Report Builder', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          setSheetState(() {
+                            for (final col in _allColumns) {
+                              col.enabled = true;
+                            }
+                          });
+                        },
+                        child: const Text('Select All', style: TextStyle(fontSize: 12)),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          setSheetState(() {
+                            for (final col in _allColumns) {
+                              col.enabled = false;
+                            }
+                          });
+                        },
+                        child: const Text('Clear All', style: TextStyle(fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const Divider(height: 16),
+              Text(
+                'Toggle columns to include in your report. Drag to reorder.',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ReorderableListView.builder(
+                  itemCount: _allColumns.length,
+                  onReorder: (oldIndex, newIndex) {
+                    setSheetState(() {
+                      if (newIndex > oldIndex) newIndex--;
+                      final item = _allColumns.removeAt(oldIndex);
+                      _allColumns.insert(newIndex, item);
+                    });
+                    setState(() {}); // Also update parent
+                  },
+                  itemBuilder: (context, index) {
+                    final col = _allColumns[index];
+                    return Card(
+                      key: ValueKey(col.id),
+                      margin: const EdgeInsets.only(bottom: 4),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: BorderSide(
+                          color: col.enabled ? const Color(0xFF007A87).withValues(alpha: 0.4) : Colors.grey.shade300,
+                          width: 0.8,
+                        ),
+                      ),
+                      child: CheckboxListTile(
+                        title: Text(col.label, style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: col.enabled ? FontWeight.bold : FontWeight.normal,
+                          color: col.enabled ? null : Colors.grey,
+                        )),
+                        value: col.enabled,
+                        dense: true,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        onChanged: (v) => setSheetState(() => col.enabled = v ?? false),
+                        secondary: const Icon(Icons.drag_handle, size: 18, color: Colors.grey),
+                        activeColor: const Color(0xFF007A87),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.check, size: 18),
+                label: Text('Apply (${_allColumns.where((c) => c.enabled).length} columns)'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF007A87),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  setState(() {}); // Refresh the main view
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Export filtered duties using custom columns configured by user
+  Future<void> _exportCustomCsv(
+    List<ExamDuty> duties,
+    List<Invigilator> invigilators,
+    String filterDesc,
+  ) async {
+    final enabledCols = _allColumns.where((c) => c.enabled).toList();
+    if (enabledCols.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select at least one column in Custom Report Builder')),
+      );
+      return;
+    }
+
+    setState(() => _isExporting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final buffer = StringBuffer();
+      // Header row
+      buffer.writeln(enabledCols.map((c) => '"${c.label.replaceAll('"', '""')}"').join(','));
+
+      // Data rows
+      for (final duty in duties) {
+        final inv = invigilators.firstWhere(
+          (i) => i.id == duty.invigilatorId,
+          orElse: () => Invigilator(id: '', name: 'Unknown Staff', resourceId: '-', mobile: '', mockDutyCount: 0),
+        );
+        final row = enabledCols.map((c) {
+          final val = _getColumnValue(c.id, duty, inv);
+          return '"${val.replaceAll('"', '""')}"';
+        }).join(',');
+        buffer.writeln(row);
+      }
+
+      final dir = await getTemporaryDirectory();
+      final timestamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
+      final file = File('${dir.path}/DutyDesk_Custom_Report_$timestamp.csv');
+      await file.writeAsString(buffer.toString());
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path, mimeType: 'text/csv')],
+          subject: 'DutyDesk Custom CSV Report',
+          text: 'DutyDesk Custom Report — $filterDesc',
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('CSV Export Error: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  /// Get column value for a given duty and invigilator.
+  String _getColumnValue(String colId, ExamDuty duty, Invigilator inv) {
+    switch (colId) {
+      case 'staffName': return inv.name;
+      case 'resourceId': return inv.resourceId;
+      case 'mobile': return inv.mobile;
+      case 'email': return inv.email ?? '-';
+      case 'examName': return duty.examName;
+      case 'date': return duty.date;
+      case 'shift': return 'Shift ${duty.shift}';
+      case 'center': return duty.centerName;
+      case 'status': return duty.status;
+      case 'payment': return duty.payment;
+      case 'paymentStatus': return duty.paymentStatus;
+      case 'arrivalTime': return duty.reachedTime ?? '-';
+      case 'arrivalPerformance': return duty.reachedPerformance ?? '-';
+      case 'gpsLocation': return duty.reachedLocation ?? '-';
+      case 'clockOutTime': return duty.clockOutTime ?? '-';
+      case 'geofenceStatus': return duty.geofenceStatus ?? '-';
+      case 'faceVerification':
+        return duty.isFaceVerified
+            ? (duty.faceMatchScore != null ? 'Verified (${duty.faceMatchScore!.toStringAsFixed(0)}%)' : 'Verified')
+            : 'Unverified';
+      default: return '-';
+    }
   }
 
   @override
@@ -201,6 +438,11 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
       appBar: AppBar(
         title: Text(s.reports),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.view_column_outlined, color: Color(0xFF007A87)),
+            tooltip: 'Custom Report Builder',
+            onPressed: _showColumnBuilderModal,
+          ),
           _isExporting
               ? const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16),
@@ -525,4 +767,17 @@ class _AdminReportsScreenState extends ConsumerState<AdminReportsScreen> {
       ),
     );
   }
+}
+
+/// Model for a selectable/reorderable report column in the Custom Report Builder.
+class ReportColumn {
+  final String id;
+  final String label;
+  bool enabled;
+
+  ReportColumn({
+    required this.id,
+    required this.label,
+    this.enabled = true,
+  });
 }

@@ -18,6 +18,8 @@ class OfflineArrivalRecord {
   final double? distanceFromCenter;
   final bool? isGeofenceVerified;
   final String? geofenceStatus;
+  final bool isFaceVerified;
+  final double? faceMatchScore;
   final String timestamp;
 
   OfflineArrivalRecord({
@@ -34,6 +36,8 @@ class OfflineArrivalRecord {
     this.distanceFromCenter,
     this.isGeofenceVerified,
     this.geofenceStatus,
+    this.isFaceVerified = false,
+    this.faceMatchScore,
     required this.timestamp,
   });
 
@@ -51,6 +55,8 @@ class OfflineArrivalRecord {
         'distanceFromCenter': distanceFromCenter,
         'isGeofenceVerified': isGeofenceVerified,
         'geofenceStatus': geofenceStatus,
+        'isFaceVerified': isFaceVerified,
+        'faceMatchScore': faceMatchScore,
         'timestamp': timestamp,
       };
 
@@ -68,6 +74,8 @@ class OfflineArrivalRecord {
         distanceFromCenter: (json['distanceFromCenter'] as num?)?.toDouble(),
         isGeofenceVerified: json['isGeofenceVerified'],
         geofenceStatus: json['geofenceStatus'],
+        isFaceVerified: json['isFaceVerified'] ?? false,
+        faceMatchScore: (json['faceMatchScore'] as num?)?.toDouble(),
         timestamp: json['timestamp'] ?? DateTime.now().toIso8601String(),
       );
 }
@@ -144,6 +152,8 @@ class OfflineSyncService {
             'distanceFromCenter': record.distanceFromCenter,
             'isGeofenceVerified': record.isGeofenceVerified ?? true,
             'geofenceStatus': record.geofenceStatus ?? 'verified',
+            'isFaceVerified': record.isFaceVerified,
+            'faceMatchScore': record.faceMatchScore,
             'syncedAt': FieldValue.serverTimestamp(),
             'isOfflineSynced': true,
           });

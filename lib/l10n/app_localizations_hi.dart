@@ -1257,4 +1257,46 @@ class SHi extends S {
 
   @override
   String get labStaff => 'लैब स्टाफ';
+
+  @override
+  String get clockOut => 'क्लॉक आउट';
+
+  @override
+  String get clockedOut => 'क्लॉक आउट हुआ';
+
+  @override
+  String get clockOutFromDuty => 'ड्यूटी से क्लॉक आउट करें';
+
+  @override
+  String get dutyClockOut => 'ड्यूटी क्लॉक-आउट';
+
+  @override
+  String get noShow => 'अनुपस्थित (नो-शो)';
+
+  @override
+  String get markNoShow => 'नो-शो चिह्नित करें';
+
+  @override
+  String get standbyStaff => 'स्टैंडबाय स्टाफ';
+
+  @override
+  String get standbyPool => 'स्टैंडबाय पूल';
+
+  @override
+  String get dispatchStandby => 'स्टैंडबाय भेजें';
+
+  @override
+  String get tagAsStandby => 'स्टैंडबाय के रूप में टैग करें';
+
+  @override
+  String get standbyReplacement => 'स्टैंडबाय प्रतिस्थापन';
+
+  @override
+  String get incidentReport => 'घटना रिपोर्ट';
+
+  @override
+  String get reportExamIncident => 'परीक्षा घटना दर्ज करें';
+
+  @override
+  String get incidentLogs => 'घटना लॉग';
 }

@@ -1259,4 +1259,46 @@ class SGu extends S {
 
   @override
   String get labStaff => 'લેબ સ્ટાફ';
+
+  @override
+  String get clockOut => 'ક્લોક આઉટ';
+
+  @override
+  String get clockedOut => 'ક્લોક આઉટ થયેલ';
+
+  @override
+  String get clockOutFromDuty => 'ડ્યુટીમાંથી ક્લોક આઉટ કરો';
+
+  @override
+  String get dutyClockOut => 'ડ્યુટી ક્લોક-આઉટ';
+
+  @override
+  String get noShow => 'ગેરહાજર (નો-શો)';
+
+  @override
+  String get markNoShow => 'નો-શો ચિહ્નિત કરો';
+
+  @override
+  String get standbyStaff => 'સ્ટેન્ડબાય સ્ટાફ';
+
+  @override
+  String get standbyPool => 'સ્ટેન્ડબાય પૂલ';
+
+  @override
+  String get dispatchStandby => 'સ્ટેન્ડબાય મોકલો';
+
+  @override
+  String get tagAsStandby => 'સ્ટેન્ડબાય તરીકે ટેગ કરો';
+
+  @override
+  String get standbyReplacement => 'સ્ટેન્ડબાય બદલી';
+
+  @override
+  String get incidentReport => 'ઘટના અહેવાલ';
+
+  @override
+  String get reportExamIncident => 'પરીક્ષા ઘટના નોંધો';
+
+  @override
+  String get incidentLogs => 'ઘટના લૉગ્સ';
 }

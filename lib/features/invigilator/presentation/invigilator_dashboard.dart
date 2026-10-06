@@ -18,6 +18,10 @@ import '../../../core/services/location_service.dart';
 import '../../admin/providers/center_provider.dart';
 import '../../notifications/providers/notification_provider.dart';
 import '../../../core/services/offline_sync_service.dart';
+import '../../incidents/providers/incident_provider.dart';
+import 'face_verification_dialog.dart';
+import 'digital_gate_pass_dialog.dart';
+import '../../../core/services/ble_beacon_service.dart';
 
 class InvigilatorDashboardScreen extends ConsumerStatefulWidget {
   const InvigilatorDashboardScreen({super.key});
@@ -213,6 +217,357 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
             child: Text(s.requestManualVerification, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showReportIncidentDialog(BuildContext context, {ExamDuty? duty, required Invigilator currentInv}) {
+    final formKey = GlobalKey<FormState>();
+    final titleCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    final roomCtrl = TextEditingController();
+    final evidenceCtrl = TextEditingController();
+    String incidentType = 'malpractice';
+    String severity = 'medium';
+    bool isSubmitting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 20,
+            right: 20,
+            top: 24,
+          ),
+          child: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.report_problem_rounded, color: Colors.red, size: 24),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Report Examination Incident',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              'Notifies Central Exam Control Room immediately',
+                              style: TextStyle(fontSize: 11, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  if (duty != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.business, size: 16, color: Color(0xFF007A87)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${duty.examName} • ${duty.centerName}',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // Incident Type Dropdown
+                  DropdownButtonFormField<String>(
+                    initialValue: incidentType,
+                    decoration: const InputDecoration(
+                      labelText: 'Incident Type *',
+                      prefixIcon: Icon(Icons.category_rounded, size: 20),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'malpractice', child: Text('Malpractice / Cheating')),
+                      DropdownMenuItem(value: 'technical', child: Text('Technical Issue (Jammer / PC / Power)')),
+                      DropdownMenuItem(value: 'medical', child: Text('Medical / Health Emergency')),
+                      DropdownMenuItem(value: 'room_change', child: Text('Room / Seating Change')),
+                      DropdownMenuItem(value: 'security', child: Text('Security / Perimeter Disturbance')),
+                      DropdownMenuItem(value: 'other', child: Text('Other Incident')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) setModalState(() => incidentType = val);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Severity Level Selector
+                  const Text('Severity Level *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      _buildIncidentSeverityChip('Low', 'low', const Color(0xFF0284C7), severity, (val) => setModalState(() => severity = val)),
+                      const SizedBox(width: 6),
+                      _buildIncidentSeverityChip('Medium', 'medium', const Color(0xFFD97706), severity, (val) => setModalState(() => severity = val)),
+                      const SizedBox(width: 6),
+                      _buildIncidentSeverityChip('High', 'high', const Color(0xFFEA580C), severity, (val) => setModalState(() => severity = val)),
+                      const SizedBox(width: 6),
+                      _buildIncidentSeverityChip('Critical', 'critical', const Color(0xFFDC2626), severity, (val) => setModalState(() => severity = val)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Room Number
+                  TextFormField(
+                    controller: roomCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Room / Hall Number *',
+                      hintText: 'e.g. Room 204 / Lab B',
+                      prefixIcon: Icon(Icons.meeting_room_outlined, size: 20),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Please specify room number' : null,
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Incident Title
+                  TextFormField(
+                    controller: titleCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Incident Subject / Title *',
+                      hintText: 'Brief summary of the issue',
+                      prefixIcon: Icon(Icons.title_rounded, size: 20),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Please enter a title' : null,
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Description
+                  TextFormField(
+                    controller: descCtrl,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Detailed Incident Description *',
+                      hintText: 'Describe candidates involved, timeline, actions taken...',
+                      prefixIcon: Icon(Icons.description_outlined, size: 20),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Please describe the incident' : null,
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Evidence / Remarks
+                  TextFormField(
+                    controller: evidenceCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Evidence / Material Remarks (Optional)',
+                      hintText: 'e.g. Seized chit copy handed to Chief Superintendent',
+                      prefixIcon: Icon(Icons.attach_file_rounded, size: 20),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Submit Button
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFDC2626),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: isSubmitting
+                        ? null
+                        : () async {
+                            if (!formKey.currentState!.validate()) return;
+                            setModalState(() => isSubmitting = true);
+                            final messenger = ScaffoldMessenger.of(context);
+
+                            try {
+                              await ref.read(incidentProvider.notifier).reportIncident(
+                                    dutyId: duty?.id,
+                                    sessionId: duty?.sessionId,
+                                    examName: duty?.examName ?? 'Examination',
+                                    centerName: duty?.centerName ?? 'Center',
+                                    centerId: '',
+                                    room: roomCtrl.text.trim(),
+                                    reportedBy: currentInv.id,
+                                    reporterName: currentInv.name,
+                                    reporterRole: duty?.role.toUpperCase() ?? 'Invigilator',
+                                    reporterMobile: currentInv.mobile,
+                                    incidentType: incidentType,
+                                    severity: severity,
+                                    title: titleCtrl.text.trim(),
+                                    description: descCtrl.text.trim(),
+                                    evidenceAttachment: evidenceCtrl.text.trim().isNotEmpty ? evidenceCtrl.text.trim() : null,
+                                  );
+
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              if (mounted) {
+                                messenger.showSnackBar(
+                                  const SnackBar(
+                                    content: Text('🚨 Incident reported successfully to Central Control Room!'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              setModalState(() => isSubmitting = false);
+                              if (mounted) {
+                                messenger.showSnackBar(
+                                  SnackBar(content: Text('Failed to submit incident: $e'), backgroundColor: Colors.red),
+                                );
+                              }
+                            }
+                          },
+                    child: isSubmitting
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text(
+                            'SUBMIT INCIDENT REPORT',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: 0.8),
+                          ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleDutyClockOut(ExamDuty duty) async {
+    final s = S.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Row(
+          children: [
+            Icon(Icons.logout_rounded, color: Color(0xFF7C3AED)),
+            SizedBox(width: 8),
+            Text('Clock Out Confirmation', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Are you sure you want to clock out for "${duty.examName}" at ${duty.centerName}?'),
+            const SizedBox(height: 10),
+            Text(
+              'Ensure all answer sheets and exam materials have been deposited before clocking out.',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(s.cancel),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF7C3AED),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, Clock Out'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final centers = ref.read(centerProvider);
+    ExamCenter? matchedCenter;
+    try {
+      matchedCenter = centers.firstWhere(
+        (c) => c.name.toLowerCase().trim() == duty.centerName.toLowerCase().trim(),
+      );
+    } catch (_) {
+      matchedCenter = centers.isNotEmpty ? centers.first : null;
+    }
+
+    final result = await ref.read(dutyProvider.notifier).recordDutyClockOut(
+          dutyId: duty.id,
+          invigilatorId: duty.invigilatorId,
+          centerLat: matchedCenter?.latitude,
+          centerLng: matchedCenter?.longitude,
+          allowedRadiusMeters: matchedCenter?.allowedRadiusMeters ?? 200,
+        );
+
+    if (!mounted) return;
+    if (result.success) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text(result.message)),
+            ],
+          ),
+          backgroundColor: const Color(0xFF7C3AED),
+        ),
+      );
+    } else {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('⚠️ ${result.error ?? result.message}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Widget _buildIncidentSeverityChip(String label, String value, Color color, String currentSeverity, Function(String) onSelect) {
+    final isSelected = currentSeverity == value;
+    return Expanded(
+      child: InkWell(
+        onTap: () => onSelect(value),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? color : color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color, width: isSelected ? 1.5 : 0.8),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.white : color,
+              fontWeight: FontWeight.bold,
+              fontSize: 11,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -619,13 +974,33 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                         ),
                       ],
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(s.staff.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    Row(
+                      children: [
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.report_problem_rounded, size: 14, color: Colors.white),
+                          label: const Text('Incident', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFDC2626),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            visualDensity: VisualDensity.compact,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: () => _showReportIncidentDialog(
+                            context,
+                            duty: todaysDutyList.isNotEmpty ? todaysDutyList.first : (activeDuties.isNotEmpty ? activeDuties.first : null),
+                            currentInv: currentInv,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(s.staff.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -722,7 +1097,7 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
               ],
             ),
             const SizedBox(height: 10),
-            ...todaysDutyList.map((d) => _buildTodayDutyCard(d, allInvs, dutySettings, s)),
+            ...todaysDutyList.map((d) => _buildTodayDutyCard(d, allInvs, dutySettings, s, currentInv)),
             const SizedBox(height: 24),
           ],
 
@@ -756,13 +1131,13 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
               ),
             )
           else
-            ...otherUpcomingDuties.map((d) => _buildStandardDutyCard(d, allInvs, dutySettings, s)),
+            ...otherUpcomingDuties.map((d) => _buildStandardDutyCard(d, allInvs, dutySettings, s, currentInv)),
         ],
       ),
     );
   }
 
-  Widget _buildTodayDutyCard(ExamDuty duty, List<Invigilator> allInvs, DutySettings dutySettings, S s) {
+  Widget _buildTodayDutyCard(ExamDuty duty, List<Invigilator> allInvs, DutySettings dutySettings, S s, Invigilator currentInv) {
     final isReached = duty.isReached;
 
     return Card(
@@ -788,6 +1163,28 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                 _buildStatusBadge(duty.status, s),
               ],
             ),
+            if (duty.isStandbyReplacement) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade100,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.amber.shade700, width: 0.8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.bolt, size: 14, color: Colors.amber.shade900),
+                    const SizedBox(width: 4),
+                    Text(
+                      'STANDBY REPLACEMENT DUTY',
+                      style: TextStyle(color: Colors.amber.shade900, fontWeight: FontWeight.bold, fontSize: 10.5),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             _buildInfoRow(Icons.calendar_today, '${s.date}: ${duty.date} (${s.today})'),
             const SizedBox(height: 6),
@@ -884,6 +1281,28 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                       }
                     }
 
+                    if (!mounted) return;
+                    // 3. Mandatory Biometric Face Verification (Anti-Proxy Attendance)
+                    final auth = ref.read(authProvider);
+                    final faceResult = await FaceVerificationDialog.show(
+                      context,
+                      staffName: auth.userName ?? 'Invigilator',
+                      resourceId: auth.userId,
+                      examName: duty.examName,
+                      centerName: duty.centerName,
+                    );
+
+                    if (faceResult == null || !faceResult.isVerified) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('⚠️ Biometric face verification is mandatory to prevent proxy attendance.'),
+                          backgroundColor: Colors.deepOrange,
+                        ),
+                      );
+                      return;
+                    }
+
                     final result = await ref.read(dutyProvider.notifier).recordDutyReached(
                           dutyId: duty.id,
                           invigilatorId: duty.invigilatorId,
@@ -894,6 +1313,8 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                           centerLng: matchedCenter?.longitude,
                           allowedRadiusMeters: matchedCenter?.allowedRadiusMeters ?? 200,
                           isManualOverride: isManualOverride,
+                          isFaceVerified: faceResult.isVerified,
+                          faceMatchScore: faceResult.matchScore,
                         );
 
                     if (result.success && mounted) {
@@ -956,6 +1377,29 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                                   style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
                                 ),
                               ),
+                              if (duty.isFaceVerified) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF6366F1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.verified_user_rounded, color: Colors.white, size: 9),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        duty.faceMatchScore != null
+                                            ? 'Face (${duty.faceMatchScore!.toStringAsFixed(0)}%)'
+                                            : 'Face Verified',
+                                        style: const TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                               if (duty.isGeofenceVerified == true) ...[
                                 const SizedBox(width: 6),
                                 Container(
@@ -1024,6 +1468,71 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                 ),
               ),
 
+            if (duty.isReached) ...[
+              if (duty.isClockedOut) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF7C3AED).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF7C3AED).withValues(alpha: 0.35), width: 1),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline, color: Color(0xFF7C3AED), size: 24),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Text('Duty Clock-Out: ', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                const Text('Completed', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF7C3AED), fontSize: 13)),
+                                const SizedBox(width: 8),
+                                if (duty.clockOutGeofenceVerified == true)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.teal.shade700,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Text('GEOFENCE VERIFIED', style: TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.bold)),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text('Clocked out at: ${duty.clockOutTime ?? "-"}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            if (duty.clockOutLocation != null) ...[
+                              const SizedBox(height: 2),
+                              Text(duty.clockOutLocation!, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.logout_rounded, size: 18),
+                    label: const Text('Clock Out from Duty', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF7C3AED),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () => _handleDutyClockOut(duty),
+                  ),
+                ),
+              ],
+            ],
+
             if (duty.status == 'pending') ...[
               const SizedBox(height: 12),
               Row(
@@ -1072,13 +1581,112 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                 ),
               ),
             ],
+
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.report_problem_outlined, size: 16, color: Color(0xFFDC2626)),
+                label: const Text('Report Exam Incident', style: TextStyle(color: Color(0xFFDC2626), fontSize: 13, fontWeight: FontWeight.bold)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFDC2626), width: 1.2),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () => _showReportIncidentDialog(context, duty: duty, currentInv: currentInv),
+              ),
+            ),
+
+            // Digital Gate Pass & QR Badge
+            if (duty.status == 'accepted') ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.qr_code_2_outlined, size: 16, color: Color(0xFF007A87)),
+                  label: const Text('Show Digital Gate Pass', style: TextStyle(color: Color(0xFF007A87), fontSize: 13, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF007A87), width: 1.2),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () => DigitalGatePassDialog.show(
+                    context,
+                    duty: duty,
+                    invigilator: currentInv,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.security_rounded, size: 16, color: Color(0xFF0D9488)),
+                  label: const Text('Question Paper Custody & Unseal', style: TextStyle(color: Color(0xFF0D9488), fontSize: 13, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF0D9488), width: 1.2),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () => context.go('/paper_dispatch'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.inventory_2_outlined, size: 16, color: Color(0xFF10B981)),
+                  label: const Text('Reconcile & Seal Answer Scripts', style: TextStyle(color: Color(0xFF10B981), fontSize: 13, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF10B981), width: 1.2),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () => context.go('/answer_sheets'),
+                ),
+              ),
+            ],
+
+            // BLE Indoor Beacon Proximity Status
+            Builder(
+              builder: (context) {
+                final bleState = ref.watch(bleBeaconProvider);
+                if (bleState.activeRoomLock != null) {
+                  final beacon = bleState.activeRoomLock!;
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6366F1).withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.bluetooth_connected, size: 14, color: Color(0xFF6366F1)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'BLE Lock: ${beacon.roomName} (${beacon.estimatedDistanceMeters}m • ${beacon.rssi} dBm)',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF6366F1)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStandardDutyCard(ExamDuty duty, List<Invigilator> allInvs, DutySettings dutySettings, S s) {
+  Widget _buildStandardDutyCard(ExamDuty duty, List<Invigilator> allInvs, DutySettings dutySettings, S s, Invigilator currentInv) {
     return Card(
       margin: const EdgeInsets.only(bottom: 14.0),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1100,6 +1708,28 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                 _buildStatusBadge(duty.status, s),
               ],
             ),
+            if (duty.isStandbyReplacement) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade100,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.amber.shade700, width: 0.8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.bolt, size: 12, color: Colors.amber.shade900),
+                    const SizedBox(width: 4),
+                    Text(
+                      'STANDBY REPLACEMENT',
+                      style: TextStyle(color: Colors.amber.shade900, fontWeight: FontWeight.bold, fontSize: 9.5),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
             _buildInfoRow(Icons.calendar_today, '${s.date}: ${duty.date}'),
             const SizedBox(height: 6),
@@ -1141,6 +1771,24 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                   ],
                 ),
               ),
+              if (duty.isClockedOut) ...[
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.logout_rounded, color: Color(0xFF7C3AED), size: 16),
+                      const SizedBox(width: 6),
+                      Text('Clocked Out: ${duty.clockOutTime ?? ""}',
+                          style: const TextStyle(color: Color(0xFF7C3AED), fontWeight: FontWeight.bold, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ],
             ],
             if (duty.status == 'pending') ...[
               const SizedBox(height: 14),
@@ -1184,6 +1832,22 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
+            if (duty.status == 'accepted') ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.report_problem_outlined, size: 14, color: Color(0xFFDC2626)),
+                  label: const Text('Report Exam Incident', style: TextStyle(color: Color(0xFFDC2626), fontSize: 12, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFFDC2626), width: 1),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => _showReportIncidentDialog(context, duty: duty, currentInv: currentInv),
                 ),
               ),
             ],

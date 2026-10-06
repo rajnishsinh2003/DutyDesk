@@ -431,5 +431,19 @@
   "clickDateToToggle": "તમારી રજા ચિહ્નિત કરવા અથવા દૂર કરવા માટે કોઈપણ તારીખ પર ટેપ કરો.",
   "inactive": "નિષ્ક્રિય",
   "invigilator": "નિરીક્ષક",
-  "labStaff": "લેબ સ્ટાફ"
+  "labStaff": "લેબ સ્ટાફ",
+  "clockOut": "ક્લોક આઉટ",
+  "clockedOut": "ક્લોક આઉટ થયેલ",
+  "clockOutFromDuty": "ડ્યુટીમાંથી ક્લોક આઉટ કરો",
+  "dutyClockOut": "ડ્યુટી ક્લોક-આઉટ",
+  "noShow": "ગેરહાજર (નો-શો)",
+  "markNoShow": "નો-શો ચિહ્નિત કરો",
+  "standbyStaff": "સ્ટેન્ડબાય સ્ટાફ",
+  "standbyPool": "સ્ટેન્ડબાય પૂલ",
+  "dispatchStandby": "સ્ટેન્ડબાય મોકલો",
+  "tagAsStandby": "સ્ટેન્ડબાય તરીકે ટેગ કરો",
+  "standbyReplacement": "સ્ટેન્ડબાય બદલી",
+  "incidentReport": "ઘટના અહેવાલ",
+  "reportExamIncident": "પરીક્ષા ઘટના નોંધો",
+  "incidentLogs": "ઘટના લૉગ્સ"
 }
