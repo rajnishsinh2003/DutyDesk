@@ -128,24 +128,24 @@
       width: 100%;
       border-collapse: collapse;
       margin-top: 8px;
-      font-size: 9.5pt;
+      font-size: 10pt;
     }
     table.diary-table th, table.diary-table td {
       border: 1.2px solid #333;
-      padding: 8px 9px;
+      padding: 12px 10px;
       vertical-align: top;
-      line-height: 1.45;
+      line-height: 1.5;
     }
     table.diary-table th {
       background-color: #f8fafc;
       font-weight: bold;
       text-align: center;
     }
-    .col-week { width: 7%; text-align: center; font-weight: bold; font-size: 11pt; }
+    .col-week { width: 8%; text-align: center; font-weight: bold; font-size: 12pt; }
     .col-activity { width: 44%; }
-    .col-remarks { width: 31%; }
-    .col-datetime { width: 11%; text-align: center; font-size: 8.5pt; }
-    .col-sign { width: 7%; }
+    .col-remarks { width: 32%; }
+    .col-datetime { width: 8%; text-align: center; font-weight: 600; font-size: 9.5pt; }
+    .col-sign { width: 8%; }
     .cover-title-box {
       text-align: center;
       margin: 25mm 0 15mm 0;
@@ -262,7 +262,7 @@
     <table class="info-table">
       <tr>
         <th>Team ID</th>
-        <td>CE-MP-26</td>
+        <td><strong>8P_021</strong></td>
       </tr>
       <tr>
         <th>Project Title</th>
@@ -282,21 +282,21 @@
       <tbody>
         <tr>
           <td>1</td>
-          <td><strong>Rajnish Sinh</strong></td>
-          <td>92410103096</td>
-          <td>CE – 8th Sem</td>
+          <td><strong>Vasu Koradiya R.</strong></td>
+          <td>92410103003</td>
+          <td>EC3</td>
         </tr>
         <tr>
           <td>2</td>
-          <td><strong>Vasu Koradiya</strong></td>
-          <td>92410103003</td>
-          <td>CE – 8th Sem</td>
+          <td><strong>Rajnish Sinh R.</strong></td>
+          <td>92410103096</td>
+          <td>EC3</td>
         </tr>
         <tr>
           <td>3</td>
-          <td><strong>Vandit Doshi</strong></td>
+          <td><strong>Vandit Doshi A.</strong></td>
           <td>92410103050</td>
-          <td>CE – 8th Sem</td>
+          <td>EC3</td>
         </tr>
       </tbody>
     </table>
@@ -304,7 +304,7 @@
     <div class="guide-box">
       <div>
         <strong>Internal Guide Name:</strong><br/>
-        <span style="font-size: 12pt; font-weight: bold; color: #007A87;">Prof. Parita Mer</span><br/>
+        <span style="font-size: 12pt; font-weight: bold; color: #007A87;">Parita Mer</span><br/>
         <span style="font-size: 9.5pt; color: #64748b;">Assistant Professor, Department of Computer Engineering</span>
       </div>
       <div style="text-align: right;">
@@ -348,30 +348,30 @@
       <tbody>
         <tr>
           <td class="col-week">1</td>
-          <td class="col-activity">Analyzed university exam bottlenecks (faculty tardiness, proxy sign-in, unverified paper unsealing). Finalized project scope, technical stack (Flutter 3.27, Dart, Riverpod, Google Cloud Firestore), and initialized Git repository with zero-lint policy.</td>
-          <td class="col-remarks">Approved project scope and requirements. Ensure strict adherence to high-stakes university exam guidelines (UGC/NTA standards). Plan module milestones.</td>
-          <td class="col-datetime">09/10/2026<br/>11:30 AM</td>
+          <td class="col-activity">Problem definition selection and basic architecture discussion about exam invigilation system.</td>
+          <td class="col-remarks">Project selection & definition approved. Plan milestones for Sem-8.</td>
+          <td class="col-datetime">9/10</td>
           <td class="col-sign"></td>
         </tr>
         <tr>
           <td class="col-week">2</td>
-          <td class="col-activity">Designed Layered Clean Architecture and unidirectional Riverpod state flow. Modeled Cloud Firestore NoSQL schema (users, centers, exam_duties, rooms, incident_reports). Configured Firebase Authentication with role guards for Admin, Invigilator, Finance, and Auditor.</td>
-          <td class="col-remarks">Good architectural blueprint. Keep database operations normalized where query efficiency is paramount. Begin implementing authentication flows.</td>
-          <td class="col-datetime">16/10/2026<br/>02:30 PM</td>
+          <td class="col-activity">Firestore database schema design and Firebase Auth role setup for Admin and Invigilator.</td>
+          <td class="col-remarks">Good schema design. Start implementing basic login and admin UI.</td>
+          <td class="col-datetime">16/10</td>
           <td class="col-sign"></td>
         </tr>
         <tr>
           <td class="col-week">3</td>
-          <td class="col-activity">Implemented responsive Super Admin Dashboard using Material 3 design tokens. Built Exam Center CRUD interface with GPS coordinate picking and geofence radius configuration. Developed Invigilator Directory with faculty profiles and historical stats.</td>
-          <td class="col-remarks">Center geofencing radius must be configurable per campus layout. Verify GPS accuracy tolerances on mobile devices.</td>
-          <td class="col-datetime">23/10/2026<br/>11:00 AM</td>
+          <td class="col-activity">Built Admin Dashboard and Exam Center management with latitude and longitude inputs.</td>
+          <td class="col-remarks">Center setup verified. Ensure geofence radius is configurable.</td>
+          <td class="col-datetime">23/10</td>
           <td class="col-sign"></td>
         </tr>
         <tr>
           <td class="col-week">4</td>
-          <td class="col-activity">Developed Core Duty Allocation Engine with automated clash and double-booking detection. Built interactive session assignment UI allowing manual overrides of reporting times. Formulated dynamic punctuality milestone windows (Reporting Time, Excellent Until, Good Until).</td>
-          <td class="col-remarks">Punctuality thresholds are well-conceived. Start engineering physical geofenced arrival verification using Geolocator.</td>
-          <td class="col-datetime">30/10/2026<br/>03:00 PM</td>
+          <td class="col-activity">Created Duty Allocation screen and added clash detection for same faculty on same time.</td>
+          <td class="col-remarks">Allocation logic tested. Start working on GPS clock-in for invigilator.</td>
+          <td class="col-datetime">30/10</td>
           <td class="col-sign"></td>
         </tr>
       </tbody>
@@ -410,30 +410,30 @@
       <tbody>
         <tr>
           <td class="col-week">1</td>
-          <td class="col-activity">Engineered mandatory Geofenced Clock-In engine utilizing geodesic Haversine distance calculations. Enforced strict clock-in block if the faculty device is outside designated center perimeter (distance > 200m). Built Invigilator Dashboard with arrival countdown.</td>
-          <td class="col-remarks">Geofencing algorithm successfully demonstrated. Ensure graceful handling of device location permission denials and GPS drift.</td>
-          <td class="col-datetime">06/11/2026<br/>11:30 AM</td>
+          <td class="col-activity">Implemented GPS geofence clock-in using Haversine distance formula (within 200m).</td>
+          <td class="col-remarks">Tested geofencing. Handle location permission denials properly.</td>
+          <td class="col-datetime">6/11</td>
           <td class="col-sign"></td>
         </tr>
         <tr>
           <td class="col-week">2</td>
-          <td class="col-activity">Developed Live Exam Control Room dashboard tracking real-time center attendance. Integrated arrival punctuality classification badges: On-Time (Green), Slightly Late (Amber), Needs Improvement (Red). Implemented direct emergency calling and replacement triggers.</td>
-          <td class="col-remarks">The real-time control room effectively reflects center status. Prepare comprehensive slide deck and demo for Review 1.</td>
-          <td class="col-datetime">13/11/2026<br/>02:00 PM</td>
+          <td class="col-activity">Built Live Control Room dashboard with arrival badges (On-Time, Late, Absent).</td>
+          <td class="col-remarks">Control room UI looks good. Prepare PPT and demo for Review 1.</td>
+          <td class="col-datetime">13/11</td>
           <td class="col-sign"></td>
         </tr>
         <tr>
           <td class="col-week" style="background: #eef2ff;">3</td>
-          <td class="col-activity" style="background: #eef2ff;"><strong>Appeared for Major Project-II Review 1 (TW: 50 Marks) on 21/11/2026.</strong> Presented literature review, system architecture, role-based auth, geofencing engine, and live control room demo. Submitted Review 1 documentation and design specification sheets.</td>
-          <td class="col-remarks" style="background: #eef2ff;"><strong>Review 1 Conducted (Satisfactory).</strong> Commended for zero-lint code quality and real-time architecture. Suggested adding biometric verification and custody tracking.</td>
-          <td class="col-datetime" style="background: #eef2ff;"><strong>21/11/2026</strong><br/>10:00 AM</td>
+          <td class="col-activity" style="background: #eef2ff;"><strong>Review 1 presentation (50 Marks).</strong> Demonstrated allocation, geofencing, and control room.</td>
+          <td class="col-remarks" style="background: #eef2ff;"><strong>Review 1 conducted.</strong> Good progress. Suggested adding face check and paper security.</td>
+          <td class="col-datetime" style="background: #eef2ff;"><strong>21/11</strong></td>
           <td class="col-sign" style="background: #eef2ff;"></td>
         </tr>
         <tr>
           <td class="col-week">4</td>
-          <td class="col-activity">Addressed Review 1 suggestions by researching camera face alignment guides and BLE beacon protocols. Implemented Peer-to-Peer (P2P) Duty Swap module allowing invigilators to request peer exchanges. Built administrative swap approval console with instant roster re-binding.</td>
-          <td class="col-remarks">Duty swap workflow functions smoothly. Ensure notification alerts reach faculty when peer swap requests are generated.</td>
-          <td class="col-datetime">27/11/2026<br/>03:30 PM</td>
+          <td class="col-activity">Worked on Peer-to-Peer duty swap system for faculty to request duty exchange.</td>
+          <td class="col-remarks">Swap request flow verified. Start working on face verification camera.</td>
+          <td class="col-datetime">27/11</td>
           <td class="col-sign"></td>
         </tr>
       </tbody>
@@ -472,30 +472,30 @@
       <tbody>
         <tr>
           <td class="col-week">1</td>
-          <td class="col-activity">Developed in-app Biometric Face Verification camera dialog with oval face alignment frame. Integrated Bluetooth Low Energy (BLE) room beacon proximity detector (ble_beacon_service.dart) for in-room presence. Implemented Text-to-Speech (TTS) voice briefing service for duty guidelines.</td>
-          <td class="col-remarks">Multi-factor verification (GPS + BLE + Face) significantly hardens attendance integrity. Test camera frame performance on low-end devices.</td>
-          <td class="col-datetime">04/12/2026<br/>11:00 AM</td>
+          <td class="col-activity">Added face verification camera frame and BLE beacon detection for hall presence.</td>
+          <td class="col-remarks">Multi-factor verification tested. Proceed to gate security pass.</td>
+          <td class="col-datetime">4/12</td>
           <td class="col-sign"></td>
         </tr>
         <tr>
           <td class="col-week">2</td>
-          <td class="col-activity">Designed and integrated Digital Gate Pass & QR Badge with encrypted token payloads. Developed Gate Pass QR Scanner terminal dialog for campus security guard checkpoints. Built WhatsApp Interactive Broadcast Hub & Webhook simulation dialog (whatsapp_dispatcher_dialog.dart).</td>
-          <td class="col-remarks">QR gate pass workflow is practical for campus gates. Ensure camera scanner terminates cleanly on pass verification.</td>
-          <td class="col-datetime">11/12/2026<br/>02:30 PM</td>
+          <td class="col-activity">Created Digital Gate Pass QR badge and QR scanner for security guard entry check.</td>
+          <td class="col-remarks">Gate pass QR verified. Now work on question paper custody tracker.</td>
+          <td class="col-datetime">11/12</td>
           <td class="col-sign"></td>
         </tr>
         <tr>
           <td class="col-week">3</td>
-          <td class="col-activity">Engineered Question Paper Dispatch Tracker & Vault Chain-of-Custody module. Implemented vault custodian handover checkout logs, driver transit tracking, and center receipt confirmation. Modeled question paper packet lifecycle states: VAULT -> TRANSIT -> RECEIVED -> UNSEALED.</td>
-          <td class="col-remarks">Paper dispatch custody is a critical feature. Add tamper alert dialogs and time-locking constraints for unsealing.</td>
-          <td class="col-datetime">18/12/2026<br/>11:30 AM</td>
+          <td class="col-activity">Implemented Question Paper Dispatch tracker from vault to center with custody status.</td>
+          <td class="col-remarks">Custody flow is good. Add time-lock so paper cannot be unsealed early.</td>
+          <td class="col-datetime">18/12</td>
           <td class="col-sign"></td>
         </tr>
         <tr>
           <td class="col-week">4</td>
-          <td class="col-activity">Developed Time-Locked Packet Unsealing Dialog (packet_unseal_dialog.dart). Enforced strict unsealing window (blocks attempts prior to authorized time, e.g. 30 mins before exam). Integrated mandatory capture of dual student witness roll numbers and OTP prior to seal break.</td>
-          <td class="col-remarks">Time-locked unsealing with student witnesses is an innovative security mechanism. Review 2 VIVA scheduled for 02/01/2027.</td>
-          <td class="col-datetime">24/12/2026<br/>03:00 PM</td>
+          <td class="col-activity">Built time-locked unseal dialog with 2 student witness roll numbers and OTP.</td>
+          <td class="col-remarks">Unseal security feature approved. Prepare working demo for Review 2.</td>
+          <td class="col-datetime">24/12</td>
           <td class="col-sign"></td>
         </tr>
       </tbody>
@@ -534,30 +534,30 @@
       <tbody>
         <tr>
           <td class="col-week" style="background: #eef2ff;">1</td>
-          <td class="col-activity" style="background: #eef2ff;"><strong>Appeared for Major Project-II Review 2 VIVA (100 Marks) on 02/01/2027.</strong> Demonstrated live geofencing, face verification, paper dispatch custody, and time-locked unsealing with student witnesses. Presented working Firestore database synchronizations and mobile UI.</td>
-          <td class="col-remarks" style="background: #eef2ff;"><strong>Review 2 VIVA Conducted (Excellent Performance).</strong> Applauded for exam security features. Work on post-exam script reconciliation, seating layout, and bulk data import.</td>
-          <td class="col-datetime" style="background: #eef2ff;"><strong>02/01/2027</strong><br/>10:30 AM</td>
+          <td class="col-activity" style="background: #eef2ff;"><strong>Review 2 VIVA (100 Marks).</strong> Live demo of paper custody, time-lock, and witness unseal.</td>
+          <td class="col-remarks" style="background: #eef2ff;"><strong>Review 2 VIVA conducted.</strong> Appreciated security flow. Now build answer script count.</td>
+          <td class="col-datetime" style="background: #eef2ff;"><strong>2/1</strong></td>
           <td class="col-sign" style="background: #eef2ff;"></td>
         </tr>
         <tr>
           <td class="col-week">2</td>
-          <td class="col-activity">Engineered Answer Script Collection & Reconciliation Engine (answer_sheet_provider.dart). Implemented mathematical script conservation balance equations (Distributed = Present + Damaged, Registered = Collected + Absent). Built on-the-fly vector PDF Form B Docket Slip generator.</td>
-          <td class="col-remarks">Mathematical reconciliation eliminates script counting disputes. Ensure PDF docket renders clean vector typography and signature lines.</td>
-          <td class="col-datetime">08/01/2027<br/>02:30 PM</td>
+          <td class="col-activity">Built Answer Script reconciliation math and automated Form B docket PDF generator.</td>
+          <td class="col-remarks">Script balance check verified. Work on student seating arrangement next.</td>
+          <td class="col-datetime">8/1</td>
           <td class="col-sign"></td>
         </tr>
         <tr>
           <td class="col-week">3</td>
-          <td class="col-activity">Developed 2D Exam Seating Plan Generator (seating_plan_screen.dart). Formulated anti-cheating branch/course interleaving algorithm ensuring adjacent desks never share syllabus. Built printable Hall Seating Notice PDF export for campus notice boards.</td>
-          <td class="col-remarks">Seating plan generator is highly functional. Implement bulk Excel import next to simplify data onboarding for large colleges.</td>
-          <td class="col-datetime">15/01/2027<br/>11:00 AM</td>
+          <td class="col-activity">Created 2D Hall Seating Plan generator with anti-cheating branch interleaving.</td>
+          <td class="col-remarks">Seating plan algorithm working. Add bulk Excel import for large data.</td>
+          <td class="col-datetime">15/1</td>
           <td class="col-sign"></td>
         </tr>
         <tr>
           <td class="col-week">4</td>
-          <td class="col-activity">Developed Bulk Data Import Engine (bulk_import_service.dart, bulk_import_screen.dart). Implemented parsing for Excel (.xlsx) and CSV files for Invigilators, Centers, Duties, and Guards. Built pre-commit validation audit console and conflict resolution modal (skip, overwrite, abort).</td>
-          <td class="col-remarks">Bulk import engine works reliably. Proceed to audit logging, CCTV video monitor, and candidate external portal.</td>
-          <td class="col-datetime">22/01/2027<br/>03:30 PM</td>
+          <td class="col-activity">Implemented Bulk Import engine for Excel (.xlsx) and CSV with validation and conflict check.</td>
+          <td class="col-remarks">Bulk import tested with sample data. Start audit trail and final testing.</td>
+          <td class="col-datetime">22/1</td>
           <td class="col-sign"></td>
         </tr>
       </tbody>
@@ -596,23 +596,23 @@
       <tbody>
         <tr>
           <td class="col-week">1</td>
-          <td class="col-activity">Engineered Immutable Audit Trail module (audit_trail_screen.dart). Developed Specialized Role Dashboards for COE, Flying Squad, and Dean. Implemented multi-feed CCTV IP Camera Monitor (cctv_monitor_screen.dart). Built external Student & Parent Portal. Added English, Hindi, and Gujarati i18n.</td>
-          <td class="col-remarks">System features completed to an exceptional level (39/39 modules). Finalize documentation, run analyzer tests, and compile final release APK.</td>
-          <td class="col-datetime">05/02/2027<br/>11:30 AM</td>
+          <td class="col-activity">Added Immutable Audit Trail, CCTV IP stream viewer, and Student/Parent exam portal.</td>
+          <td class="col-remarks">All modules integrated. Run code analyzer and prepare final report book.</td>
+          <td class="col-datetime">5/2</td>
           <td class="col-sign"></td>
         </tr>
         <tr>
           <td class="col-week" style="background: #eef2ff;">2</td>
-          <td class="col-activity" style="background: #eef2ff;"><strong>Appeared for Major Project-II Review 3 VIVA (100 Marks) on 13/02/2027.</strong> <strong>Submitted Final Hardbound Project Report (100 Marks TW).</strong> Executed flutter analyze with 0 issues found. Built production Android release APK (72.8 MB). Pushed complete codebase to GitHub.</td>
-          <td class="col-remarks" style="background: #eef2ff;"><strong>Review 3 VIVA & Final Project Report Approved.</strong> Excellent comprehensive engineering effort. Project demonstrated 100% completion of all proposed modules.</td>
-          <td class="col-datetime" style="background: #eef2ff;"><strong>13/02/2027</strong><br/>10:00 AM</td>
+          <td class="col-activity" style="background: #eef2ff;"><strong>Review 3 VIVA (100 Marks) and Final Project Report Submission (100 Marks TW).</strong> Built APK.</td>
+          <td class="col-remarks" style="background: #eef2ff;"><strong>Review 3 VIVA & Report approved.</strong> Zero lint issues. Project completed successfully.</td>
+          <td class="col-datetime" style="background: #eef2ff;"><strong>13/2</strong></td>
           <td class="col-sign" style="background: #eef2ff;"></td>
         </tr>
         <tr>
           <td class="col-week">3</td>
-          <td class="col-activity">Completed semester project closure, final diary verification, and signed attendance record (05/10/2026 to 22/02/2027). Packaged deployment guide, APK download links, and source repository documentation for departmental archives.</td>
-          <td class="col-remarks">Project diary entries, term work attendance, and final submission approved. Ready for final University Examination VIVA.</td>
-          <td class="col-datetime">20/02/2027<br/>02:00 PM</td>
+          <td class="col-activity">Final project diary sign-off, attendance completion, and code archive submission.</td>
+          <td class="col-remarks">Project diary entries and attendance verified. All term work completed.</td>
+          <td class="col-datetime">20/2</td>
           <td class="col-sign"></td>
         </tr>
       </tbody>
