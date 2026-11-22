@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:duty_desk/l10n/app_localizations.dart';
 import '../providers/invigilator_provider.dart';
+import '../../face_verification/presentation/multi_angle_face_enrollment_dialog.dart';
 
 class ManageInvigilatorsScreen extends ConsumerStatefulWidget {
   const ManageInvigilatorsScreen({super.key});
@@ -134,6 +135,17 @@ class _ManageInvigilatorsScreenState extends ConsumerState<ManageInvigilatorsScr
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/admin_dashboard');
+            }
+          },
+        ),
         title: Text(s.manageStaff),
         actions: [
           IconButton(
@@ -275,6 +287,36 @@ class _ManageInvigilatorsScreenState extends ConsumerState<ManageInvigilatorsScr
                                       ),
                                     ),
                                     const SizedBox(width: 8),
+                                    // Face ID Status Badge
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: inv.isFaceEnrolled
+                                            ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                                            : Colors.amber.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            inv.isFaceEnrolled ? Icons.verified_rounded : Icons.face_outlined,
+                                            size: 11,
+                                            color: inv.isFaceEnrolled ? const Color(0xFF047857) : Colors.amber.shade900,
+                                          ),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            inv.isFaceEnrolled ? 'Face ID' : 'No Face',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: inv.isFaceEnrolled ? const Color(0xFF047857) : Colors.amber.shade900,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
@@ -372,6 +414,26 @@ class _ManageInvigilatorsScreenState extends ConsumerState<ManageInvigilatorsScr
                                     Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
+                                        IconButton(
+                                          icon: Icon(
+                                            inv.isFaceEnrolled ? Icons.verified_user_rounded : Icons.face_retouching_natural_rounded,
+                                            color: inv.isFaceEnrolled ? const Color(0xFF10B981) : Colors.amber.shade800,
+                                            size: 20,
+                                          ),
+                                          tooltip: inv.isFaceEnrolled ? 'Face ID Enrolled (3 Angles in Supabase)' : 'Enroll 3-Angle Face ID',
+                                          visualDensity: VisualDensity.compact,
+                                          onPressed: () {
+                                            MultiAngleFaceEnrollmentDialog.show(
+                                              context,
+                                              staffDocId: inv.id,
+                                              staffName: inv.name,
+                                              resourceId: inv.resourceId,
+                                              existingFrontUrl: inv.faceFrontUrl,
+                                              existingLeftUrl: inv.faceLeftUrl,
+                                              existingRightUrl: inv.faceRightUrl,
+                                            );
+                                          },
+                                        ),
                                         IconButton(
                                           icon: const Icon(Icons.edit_outlined, color: Colors.blue, size: 20),
                                           tooltip: s.editStaff,

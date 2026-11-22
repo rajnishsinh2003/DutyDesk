@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:duty_desk/l10n/app_localizations.dart';
+import 'package:go_router/go_router.dart';
 import '../providers/invigilator_provider.dart';
 import '../../invigilator/providers/duty_provider.dart';
 
@@ -43,6 +44,17 @@ class InvigilatorProfileScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/admin_dashboard/manage_invigilators');
+            }
+          },
+        ),
         title: Text(s.invigilatorProfile),
         elevation: 0,
       ),

@@ -8,6 +8,7 @@ import '../../../core/services/location_service.dart';
 class AddCenterScreen extends ConsumerStatefulWidget {
   final ExamCenter? existingCenter;
 
+
   const AddCenterScreen({super.key, this.existingCenter});
 
   @override
@@ -70,41 +71,56 @@ class _AddCenterScreenState extends ConsumerState<AddCenterScreen> {
     }
   }
 
-  void _saveCenter() {
+  bool _isSaving = false;
+
+  void _saveCenter() async {
     final s = S.of(context)!;
     if (_formKey.currentState!.validate()) {
-      final name = _nameController.text.trim();
-      final location = _locationController.text.trim();
-      final capacity = int.tryParse(_capacityController.text.trim()) ?? 0;
-      final lat = double.tryParse(_latController.text.trim());
-      final lng = double.tryParse(_lngController.text.trim());
-      final radius = int.tryParse(_radiusController.text.trim()) ?? 200;
+      setState(() => _isSaving = true);
+      try {
+        final name = _nameController.text.trim();
+        final location = _locationController.text.trim();
+        final capacity = int.tryParse(_capacityController.text.trim()) ?? 0;
+        final lat = double.tryParse(_latController.text.trim());
+        final lng = double.tryParse(_lngController.text.trim());
+        final radius = int.tryParse(_radiusController.text.trim()) ?? 200;
 
-      if (widget.existingCenter == null) {
-        ref.read(centerProvider.notifier).addCenter(
-              name,
-              location,
-              capacity,
-              latitude: lat,
-              longitude: lng,
-              allowedRadiusMeters: radius,
-            );
-      } else {
-        ref.read(centerProvider.notifier).updateCenter(
-              widget.existingCenter!.id,
-              name,
-              location,
-              capacity,
-              latitude: lat,
-              longitude: lng,
-              allowedRadiusMeters: radius,
-            );
+        if (widget.existingCenter == null) {
+          await ref.read(centerProvider.notifier).addCenter(
+                name,
+                location,
+                capacity,
+                latitude: lat,
+                longitude: lng,
+                allowedRadiusMeters: radius,
+              );
+        } else {
+          await ref.read(centerProvider.notifier).updateCenter(
+                widget.existingCenter!.id,
+                name,
+                location,
+                capacity,
+                latitude: lat,
+                longitude: lng,
+                allowedRadiusMeters: radius,
+              );
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(widget.existingCenter == null ? s.centerAddedSuccess : s.centerUpdated)),
+          );
+          context.pop();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isSaving = false);
       }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.existingCenter == null ? s.centerAddedSuccess : s.centerUpdated)),
-      );
-      context.pop();
     }
   }
 
@@ -115,6 +131,17 @@ class _AddCenterScreenState extends ConsumerState<AddCenterScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/admin_dashboard/manage_centers');
+            }
+          },
+        ),
         title: Text(isEditing ? s.editCenter : s.addCenter),
       ),
       body: SingleChildScrollView(
@@ -224,14 +251,20 @@ class _AddCenterScreenState extends ConsumerState<AddCenterScreen> {
 
               const SizedBox(height: 32),
               ElevatedButton(
-                onPressed: _saveCenter,
+                onPressed: _isSaving ? null : _saveCenter,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: const Color(0xFF007A87),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                child: Text(isEditing ? s.updateCenter : s.saveCenter, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
+                      )
+                    : Text(isEditing ? s.updateCenter : s.saveCenter, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ],
           ),

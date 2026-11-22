@@ -92,7 +92,13 @@ class _DutyAllocationScreenState extends ConsumerState<DutyAllocationScreen> {
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: _isCreating ? const CircularProgressIndicator(color: Colors.white) : Text(s.registerExam, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    child: _isCreating
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
+                          )
+                        : Text(s.registerExam, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                   const SizedBox(height: 16),
                 ],
@@ -111,6 +117,17 @@ class _DutyAllocationScreenState extends ConsumerState<DutyAllocationScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/admin_dashboard');
+            }
+          },
+        ),
         title: Text(s.registeredExams),
       ),
       floatingActionButton: FloatingActionButton.extended(

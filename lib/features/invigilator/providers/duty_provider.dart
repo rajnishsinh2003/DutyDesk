@@ -26,6 +26,8 @@ class ExamDuty {
   final String reportingTime;
   final String excellentUntil; // e.g. "06:20 AM"
   final String goodUntil;      // e.g. "06:30 AM"
+  final String dutyStartTime;  // e.g. "09:00 AM"
+  final String dutyEndTime;    // e.g. "01:00 PM"
   final bool isReached;
   final DateTime? reachedAt;
   final String? reachedTime;
@@ -58,6 +60,7 @@ class ExamDuty {
   final DateTime? paidAt;
   final String? paymentReference;
   final String? paymentRemarks;
+  final DateTime? createdAt;
 
   ExamDuty({
     required this.id,
@@ -74,6 +77,8 @@ class ExamDuty {
     this.reportingTime = '05:00 AM',
     this.excellentUntil = '06:20 AM',
     this.goodUntil = '06:30 AM',
+    this.dutyStartTime = '09:00 AM',
+    this.dutyEndTime = '01:00 PM',
     this.isReached = false,
     this.reachedAt,
     this.reachedTime,
@@ -105,11 +110,13 @@ class ExamDuty {
     this.paidAt,
     this.paymentReference,
     this.paymentRemarks,
+    this.createdAt,
   });
 
   factory ExamDuty.fromFirestore(String id, Map<String, dynamic> data) {
     final Timestamp? reachedTimestamp = data['reachedAt'];
     final Timestamp? paidTimestamp = data['paidAt'];
+    final Timestamp? createdTimestamp = data['createdAt'];
     return ExamDuty(
       id: id,
       date: data['date'] ?? '',
@@ -125,6 +132,8 @@ class ExamDuty {
       reportingTime: data['reportingTime'] ?? '05:00 AM',
       excellentUntil: data['excellentUntil'] ?? '06:20 AM',
       goodUntil: data['goodUntil'] ?? '06:30 AM',
+      dutyStartTime: data['dutyStartTime'] ?? data['startTime'] ?? '09:00 AM',
+      dutyEndTime: data['dutyEndTime'] ?? data['endTime'] ?? '01:00 PM',
       isReached: data['isReached'] ?? false,
       reachedAt: reachedTimestamp?.toDate(),
       reachedTime: data['reachedTime'],
@@ -156,6 +165,7 @@ class ExamDuty {
       paidAt: paidTimestamp?.toDate(),
       paymentReference: data['paymentReference'],
       paymentRemarks: data['paymentRemarks'],
+      createdAt: createdTimestamp?.toDate(),
     );
   }
 
@@ -174,6 +184,8 @@ class ExamDuty {
     String? reportingTime,
     String? excellentUntil,
     String? goodUntil,
+    String? dutyStartTime,
+    String? dutyEndTime,
     bool? isReached,
     DateTime? reachedAt,
     String? reachedTime,
@@ -205,6 +217,7 @@ class ExamDuty {
     DateTime? paidAt,
     String? paymentReference,
     String? paymentRemarks,
+    DateTime? createdAt,
   }) {
     return ExamDuty(
       id: id ?? this.id,
@@ -221,6 +234,8 @@ class ExamDuty {
       reportingTime: reportingTime ?? this.reportingTime,
       excellentUntil: excellentUntil ?? this.excellentUntil,
       goodUntil: goodUntil ?? this.goodUntil,
+      dutyStartTime: dutyStartTime ?? this.dutyStartTime,
+      dutyEndTime: dutyEndTime ?? this.dutyEndTime,
       isReached: isReached ?? this.isReached,
       reachedAt: reachedAt ?? this.reachedAt,
       reachedTime: reachedTime ?? this.reachedTime,
@@ -252,6 +267,7 @@ class ExamDuty {
       paidAt: paidAt ?? this.paidAt,
       paymentReference: paymentReference ?? this.paymentReference,
       paymentRemarks: paymentRemarks ?? this.paymentRemarks,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 
@@ -272,6 +288,56 @@ class ExamDuty {
       return 'https://www.google.com/maps/search/?api=1&query=$reachedLatitude,$reachedLongitude';
     }
     return null;
+  }
+
+  /// Parses exam date + dutyEndTime into a concrete DateTime object.
+  DateTime? get parsedEndDateTime {
+    try {
+      DateTime? baseDate;
+      if (date.isNotEmpty) {
+        baseDate = DateTime.tryParse(date);
+        if (baseDate == null) {
+          final parts = date.split(RegExp(r'[-/]'));
+          if (parts.length == 3) {
+            if (parts[0].length == 4) {
+              baseDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+            } else {
+              baseDate = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+            }
+          }
+        }
+      }
+      baseDate ??= DateTime.now();
+
+      final cleanTime = dutyEndTime.trim();
+      DateTime timeParsed;
+      try {
+        timeParsed = DateFormat('hh:mm a').parse(cleanTime);
+      } catch (_) {
+        try {
+          timeParsed = DateFormat('HH:mm').parse(cleanTime);
+        } catch (_) {
+          return null;
+        }
+      }
+
+      return DateTime(
+        baseDate.year,
+        baseDate.month,
+        baseDate.day,
+        timeParsed.hour,
+        timeParsed.minute,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// True if exam end time has passed, or if no valid end time is set.
+  bool get isExamCompleted {
+    final endDt = parsedEndDateTime;
+    if (endDt == null) return true;
+    return DateTime.now().isAfter(endDt);
   }
 }
 
@@ -387,6 +453,8 @@ class DutyNotifier extends Notifier<List<ExamDuty>> {
     String reportingTime = '05:00 AM',
     String excellentUntil = '06:20 AM',
     String goodUntil = '06:30 AM',
+    String dutyStartTime = '09:00 AM',
+    String dutyEndTime = '01:00 PM',
   }) async {
     final invigilators = ref.read(invigilatorProvider);
     final inv = invigilators.firstWhere(
@@ -419,6 +487,8 @@ class DutyNotifier extends Notifier<List<ExamDuty>> {
       'reportingTime': reportingTime,
       'excellentUntil': excellentUntil,
       'goodUntil': goodUntil,
+      'dutyStartTime': dutyStartTime,
+      'dutyEndTime': dutyEndTime,
       'isReached': false,
       'reachedAt': null,
       'reachedTime': null,
@@ -881,6 +951,8 @@ class DutyNotifier extends Notifier<List<ExamDuty>> {
     String reportingTime = '05:00 AM',
     String excellentUntil = '06:20 AM',
     String goodUntil = '06:30 AM',
+    String dutyStartTime = '09:00 AM',
+    String dutyEndTime = '01:00 PM',
   }) async {
     for (final invId in invigilatorIds) {
       try {
@@ -897,6 +969,8 @@ class DutyNotifier extends Notifier<List<ExamDuty>> {
           reportingTime: reportingTime,
           excellentUntil: excellentUntil,
           goodUntil: goodUntil,
+          dutyStartTime: dutyStartTime,
+          dutyEndTime: dutyEndTime,
         );
       } catch (e) {
         log('Error in bulk allocate for inv $invId: $e');
@@ -917,6 +991,8 @@ class DutyNotifier extends Notifier<List<ExamDuty>> {
     String reportingTime = '05:00 AM',
     String excellentUntil = '06:20 AM',
     String goodUntil = '06:30 AM',
+    String dutyStartTime = '09:00 AM',
+    String dutyEndTime = '01:00 PM',
   }) async {
     for (final date in dates) {
       for (final invId in invigilatorIds) {
@@ -934,6 +1010,8 @@ class DutyNotifier extends Notifier<List<ExamDuty>> {
             reportingTime: reportingTime,
             excellentUntil: excellentUntil,
             goodUntil: goodUntil,
+            dutyStartTime: dutyStartTime,
+            dutyEndTime: dutyEndTime,
           );
         } catch (e) {
           log('Error in multi-date allocate for date $date, inv $invId: $e');
@@ -968,6 +1046,8 @@ class DutyNotifier extends Notifier<List<ExamDuty>> {
           reportingTime: settings['reportingTime'] ?? '05:00 AM',
           excellentUntil: settings['excellentUntil'] ?? '06:20 AM',
           goodUntil: settings['goodUntil'] ?? '06:30 AM',
+          dutyStartTime: settings['dutyStartTime'] ?? '09:00 AM',
+          dutyEndTime: settings['dutyEndTime'] ?? '01:00 PM',
         );
       } catch (e) {
         log('Error in bulk individual allocate for inv $invId: $e');

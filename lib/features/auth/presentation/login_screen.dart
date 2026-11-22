@@ -18,13 +18,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _obscurePassword = true;
 
   @override
+  void initState() {
+    super.initState();
+    _mobileController.addListener(_autoDetectRole);
+  }
+
+  void _autoDetectRole() {
+    final text = _mobileController.text.trim().toLowerCase();
+    if (text.contains('@') || text.contains('admin') || text.contains('finance') || text.contains('auditor')) {
+      if (!_isAdminLogin) {
+        setState(() => _isAdminLogin = true);
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    _mobileController.removeListener(_autoDetectRole);
     _mobileController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  void _handleLogin() {
+  void _handleLogin() async {
     final s = S.of(context)!;
     final mobile = _mobileController.text.trim();
     final password = _passwordController.text.trim();
@@ -37,7 +53,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
       return;
     }
-    ref.read(authProvider.notifier).login(mobile, password, _isAdminLogin);
+    final lowerMobile = mobile.toLowerCase();
+    final isAdmin = _isAdminLogin || 
+                    lowerMobile.contains('admin') || 
+                    lowerMobile.contains('@') || 
+                    lowerMobile.contains('finance') || 
+                    lowerMobile.contains('auditor');
+    await ref.read(authProvider.notifier).login(mobile, password, isAdmin);
+
+    if (!mounted) return;
+    final authState = ref.read(authProvider);
+    if (authState.error == null) {
+      if (authState.role == UserRole.admin) {
+        context.go('/admin_dashboard');
+      } else if (authState.role == UserRole.auditor) {
+        context.go('/auditor_dashboard');
+      } else if (authState.role == UserRole.finance) {
+        context.go('/admin_dashboard/payroll');
+      } else if (authState.role == UserRole.invigilator) {
+        context.go('/invigilator_dashboard');
+      }
+    }
   }
 
   @override
@@ -93,27 +129,67 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       backgroundColor: bgColor,
       body: SafeArea(
         child: Stack(
+          alignment: Alignment.center,
           children: [
+            // Ambient subtle background glow for desktop & web
+            Positioned(
+              top: -60,
+              child: Container(
+                width: 500,
+                height: 500,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      brandColor.withValues(alpha: isDark ? 0.15 : 0.08),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // HOME / BACK TO LANDING OVERVIEW BUTTON
+            Positioned(
+              top: 14,
+              left: 18,
+              child: IconButton.filledTonal(
+                icon: const Icon(Icons.home_outlined, size: 20),
+                tooltip: 'Back to Overview',
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/');
+                  }
+                },
+              ),
+            ),
+
             // LANGUAGE QUICK SWITCH BUTTON ON LOGIN
             Positioned(
-              top: 12,
-              right: 16,
+              top: 14,
+              right: 18,
               child: IconButton.filledTonal(
                 icon: const Icon(Icons.language_rounded, size: 20),
                 tooltip: s.language,
                 onPressed: () => context.push('/settings/language'),
               ),
             ),
+
             Center(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 12),
-                    // 1. BRAND LOGO & HERO HEADER
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 24.0),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 460),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: 8),
+                        // 1. BRAND LOGO & HERO HEADER
                     Center(
                       child: Container(
                         width: 84,
@@ -373,7 +449,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 24),
+
+                          // FORGOT PASSWORD LINK (Available on both Staff & Admin tabs)
+                          const SizedBox(height: 10),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: () => context.push('/forgot_password'),
+                              icon: Icon(
+                                Icons.lock_reset_rounded,
+                                size: 16,
+                                color: isDark ? const Color(0xFF2DD4BF) : const Color(0xFF007A87),
+                              ),
+                              label: Text(
+                                'Forgot Password?',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? const Color(0xFF2DD4BF) : const Color(0xFF007A87),
+                                ),
+                              ),
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
 
                           // LOGIN SUBMIT BUTTON
                           Container(
@@ -422,64 +525,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 20),
 
-                    // 2.5 QUICK DEMO ROLE SELECTOR (1-Click Evaluation for all 4 RBAC Roles)
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: cardBgColor,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: cardBorderColor),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.security, size: 16, color: brandColor),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Role-Based Access Control (1-Tap Demo)',
-                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: primaryTextColor),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              _demoRoleChip(
-                                label: 'Admin',
-                                icon: Icons.admin_panel_settings,
-                                color: const Color(0xFF007A87),
-                                role: UserRole.admin,
-                              ),
-                              _demoRoleChip(
-                                label: 'Finance Officer',
-                                icon: Icons.payments_outlined,
-                                color: const Color(0xFF059669),
-                                role: UserRole.finance,
-                              ),
-                              _demoRoleChip(
-                                label: 'Auditor / Observer',
-                                icon: Icons.visibility_outlined,
-                                color: const Color(0xFFD97706),
-                                role: UserRole.auditor,
-                              ),
-                              _demoRoleChip(
-                                label: 'Invigilator',
-                                icon: Icons.badge_outlined,
-                                color: const Color(0xFF6366F1),
-                                role: UserRole.invigilator,
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
+
 
                     // 3. HELPER FOOTER BANNER
                     Container(
@@ -539,42 +586,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
               ),
             ),
-          ],
+          ),
         ),
-      ),
-    );
-  }
-
-  Widget _demoRoleChip({
-    required String label,
-    required IconData icon,
-    required Color color,
-    required UserRole role,
-  }) {
-    return InkWell(
-      onTap: () {
-        ref.read(authProvider.notifier).loginAsDemoRole(role);
-      },
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withValues(alpha: 0.4)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: color),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: color),
-            ),
-          ],
-        ),
-      ),
-    );
+      ],
+    ),
+  ),
+);
   }
 }

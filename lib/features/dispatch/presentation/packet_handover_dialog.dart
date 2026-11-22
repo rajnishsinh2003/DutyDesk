@@ -45,6 +45,7 @@ class _PacketHandoverDialogState extends ConsumerState<PacketHandoverDialog> {
   late TextEditingController _nameCtrl;
   final _notesCtrl = TextEditingController();
   String? _selectedInvigilatorId;
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -64,35 +65,40 @@ class _PacketHandoverDialogState extends ConsumerState<PacketHandoverDialog> {
   }
 
   void _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate() || _isSubmitting) return;
+    setState(() => _isSubmitting = true);
     HapticFeedback.mediumImpact();
 
-    final notifier = ref.read(questionPaperProvider.notifier);
+    try {
+      final notifier = ref.read(questionPaperProvider.notifier);
 
-    if (widget.handoverType == HandoverType.strongroomCheckout) {
-      await notifier.dispatchFromStrongroom(
-        packetId: widget.packet.id,
-        custodianName: _nameCtrl.text.trim(),
-        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-      );
-    } else {
-      await notifier.handoverToInvigilator(
-        packetId: widget.packet.id,
-        invigilatorId: _selectedInvigilatorId ?? widget.packet.assignedInvigilatorId ?? 'INV-01',
-        invigilatorName: _nameCtrl.text.trim(),
-        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-      );
-    }
+      if (widget.handoverType == HandoverType.strongroomCheckout) {
+        await notifier.dispatchFromStrongroom(
+          packetId: widget.packet.id,
+          custodianName: _nameCtrl.text.trim(),
+          notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        );
+      } else {
+        await notifier.handoverToInvigilator(
+          packetId: widget.packet.id,
+          invigilatorId: _selectedInvigilatorId ?? widget.packet.assignedInvigilatorId ?? 'INV-01',
+          invigilatorName: _nameCtrl.text.trim(),
+          notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        );
+      }
 
-    if (mounted) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('✅ Chain of custody updated for ${widget.packet.packetCode}'),
-          backgroundColor: const Color(0xFF10B981),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Chain of custody updated for ${widget.packet.packetCode}'),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -272,15 +278,23 @@ class _PacketHandoverDialogState extends ConsumerState<PacketHandoverDialog> {
                   ),
                   const Spacer(),
                   ElevatedButton.icon(
-                    icon: const Icon(Icons.check_circle_rounded, size: 18),
-                    label: Text(isCheckout ? 'Confirm Vault Release' : 'Confirm Receipt'),
+                    icon: _isSubmitting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.check_circle_rounded, size: 18),
+                    label: Text(_isSubmitting
+                        ? 'Updating Custody...'
+                        : (isCheckout ? 'Confirm Vault Release' : 'Confirm Receipt')),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: isCheckout ? const Color(0xFFF59E0B) : const Color(0xFF2563EB),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    onPressed: _submit,
+                    onPressed: _isSubmitting ? null : _submit,
                   ),
                 ],
               ),

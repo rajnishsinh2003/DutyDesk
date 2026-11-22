@@ -129,6 +129,11 @@ class _DutySettingsDialogState extends ConsumerState<DutySettingsDialog> {
                     ],
                   ),
                 ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  tooltip: 'Close Settings',
+                  onPressed: () => Navigator.pop(context),
+                ),
               ],
             ),
             const SizedBox(height: 24),

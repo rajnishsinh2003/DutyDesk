@@ -74,6 +74,17 @@ class _MaintainDataScreenState extends ConsumerState<MaintainDataScreen> with Si
     return Scaffold(
       backgroundColor: screenBgColor,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/admin_dashboard');
+            }
+          },
+        ),
         title: Text('Maintain Data', style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
         backgroundColor: screenBgColor,
         elevation: 0,

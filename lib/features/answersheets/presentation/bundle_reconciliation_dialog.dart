@@ -31,6 +31,7 @@ class _BundleReconciliationDialogState extends ConsumerState<BundleReconciliatio
   late TextEditingController _blankCtrl;
   late TextEditingController _absentRollsCtrl;
   late TextEditingController _invigilatorNameCtrl;
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -58,37 +59,42 @@ class _BundleReconciliationDialogState extends ConsumerState<BundleReconciliatio
   }
 
   void _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate() || _isSubmitting) return;
+    setState(() => _isSubmitting = true);
     HapticFeedback.heavyImpact();
 
-    final present = int.tryParse(_presentCtrl.text.trim()) ?? 0;
-    final absent = int.tryParse(_absentCtrl.text.trim()) ?? 0;
-    final collected = int.tryParse(_collectedCtrl.text.trim()) ?? 0;
-    final blank = int.tryParse(_blankCtrl.text.trim()) ?? 0;
+    try {
+      final present = int.tryParse(_presentCtrl.text.trim()) ?? 0;
+      final absent = int.tryParse(_absentCtrl.text.trim()) ?? 0;
+      final collected = int.tryParse(_collectedCtrl.text.trim()) ?? 0;
+      final blank = int.tryParse(_blankCtrl.text.trim()) ?? 0;
 
-    final rawRolls = _absentRollsCtrl.text.split(',');
-    final rolls = rawRolls.map((r) => r.trim()).where((r) => r.isNotEmpty).toList();
+      final rawRolls = _absentRollsCtrl.text.split(',');
+      final rolls = rawRolls.map((r) => r.trim()).where((r) => r.isNotEmpty).toList();
 
-    await ref.read(answerSheetProvider.notifier).reconcileAndSeal(
-      bundleId: widget.bundle.id,
-      securitySealNumber: _sealNumberCtrl.text.trim(),
-      presentCount: present,
-      absentCount: absent,
-      collectedScriptCount: collected,
-      blankSheetsReturned: blank,
-      absentRollNumbers: rolls,
-      invigilatorName: _invigilatorNameCtrl.text.trim(),
-    );
-
-    if (mounted) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('📦 Bundle ${widget.bundle.bundleCode} reconciled and sealed!'),
-          backgroundColor: const Color(0xFF10B981),
-          behavior: SnackBarBehavior.floating,
-        ),
+      await ref.read(answerSheetProvider.notifier).reconcileAndSeal(
+        bundleId: widget.bundle.id,
+        securitySealNumber: _sealNumberCtrl.text.trim(),
+        presentCount: present,
+        absentCount: absent,
+        collectedScriptCount: collected,
+        blankSheetsReturned: blank,
+        absentRollNumbers: rolls,
+        invigilatorName: _invigilatorNameCtrl.text.trim(),
       );
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('📦 Bundle ${widget.bundle.bundleCode} reconciled and sealed!'),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -363,15 +369,23 @@ class _BundleReconciliationDialogState extends ConsumerState<BundleReconciliatio
                   ),
                   const Spacer(),
                   ElevatedButton.icon(
-                    icon: const Icon(Icons.lock_rounded, size: 18),
-                    label: Text(isBalanced ? 'Confirm & Seal Bundle' : 'Log with Mismatch Flag'),
+                    icon: _isSubmitting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.lock_rounded, size: 18),
+                    label: Text(_isSubmitting
+                        ? 'Sealing Bundle...'
+                        : (isBalanced ? 'Confirm & Seal Bundle' : 'Log with Mismatch Flag')),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: isBalanced ? const Color(0xFF10B981) : const Color(0xFFEF4444),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    onPressed: _submit,
+                    onPressed: _isSubmitting ? null : _submit,
                   ),
                 ],
               ),

@@ -17,6 +17,17 @@ class ManageCentersScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/admin_dashboard');
+            }
+          },
+        ),
         title: Text(s.manageCenters),
       ),
       body: centers.isEmpty

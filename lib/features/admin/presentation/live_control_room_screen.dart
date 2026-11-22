@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:duty_desk/l10n/app_localizations.dart';
+import 'package:go_router/go_router.dart';
 import '../../invigilator/providers/duty_provider.dart';
 import '../../notifications/providers/notification_provider.dart';
 import '../providers/center_provider.dart';
@@ -885,6 +886,17 @@ class _LiveControlRoomScreenState extends ConsumerState<LiveControlRoomScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/admin_dashboard');
+            }
+          },
+        ),
         title: Text(s.liveExamControlRoom, style: const TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(

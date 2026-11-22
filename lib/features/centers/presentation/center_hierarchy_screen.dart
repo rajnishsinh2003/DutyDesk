@@ -5,6 +5,7 @@ import '../models/room_model.dart';
 import '../providers/center_hierarchy_provider.dart';
 import '../services/center_readiness_pdf_service.dart';
 import '../../admin/providers/center_provider.dart';
+import 'package:go_router/go_router.dart';
 
 class CenterHierarchyScreen extends ConsumerStatefulWidget {
   final String centerId;
@@ -111,6 +112,17 @@ class _CenterHierarchyScreenState extends ConsumerState<CenterHierarchyScreen> w
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/manage_centers');
+            }
+          },
+        ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

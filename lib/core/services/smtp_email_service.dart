@@ -1,66 +1,104 @@
+import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
+import 'web_email_dispatcher.dart';
 
-/// A secure, client-side service for sending programmatic emails via SMTP directly from
-/// the application (Android/iOS platforms only).
-/// 
-/// > [!NOTE]
-/// > Because this uses raw TCP socket connections, it is only supported on mobile platforms.
-/// > Attempting to use this on Flutter Web will result in socket errors due to browser restrictions.
+/// A secure service for sending transactional emails via Google Apps Script Web App
+/// or Gmail SMTP.
 class SmtpEmailService {
   // ==========================================
   // ⚙️ SMTP CONFIGURATION
   // ==========================================
   
-  /// The SMTP server hostname.
-  /// Common values:
-  /// - Gmail: `smtp.gmail.com`
-  /// - Outlook: `smtp.office365.com`
-  /// - Yahoo: `smtp.mail.yahoo.com`
   static const String _smtpHost = 'smtp.gmail.com'; 
-
-  /// The port your SMTP server uses.
-  /// Common values:
-  /// - `465` (SSL - Recommended for secure direct SMTP)
-  /// - `587` (TLS / StartTLS - Often used with SSL set to false)
   static const int _smtpPort = 465; 
-
-  /// Enable SSL connection. 
-  /// Set to `true` if using port `465`. Set to `false` if using port `587` or `25`.
   static const bool _useSsl = true;
-
-  /// Your SMTP account username (usually your full email address).
   static const String _username = 'envirowatch.service@gmail.com'; 
-
-  /// Your SMTP account password.
-  /// 
-  /// > [!IMPORTANT]
-  /// > If you are using **Gmail**, you CANNOT use your standard account password!
-  /// > You must generate a 16-character **App Password** from your Google Account settings:
-  /// > 1. Go to Google Account Settings -> Security.
-  /// > 2. Enable 2-Step Verification if not already enabled.
-  /// > 3. Search for "App Passwords" and create one (select App: 'Other', name: 'DutyDesk').
-  /// > 4. Copy the 16-character password and paste it below.
   static const String _password = 'yuaiuwpkcdpmlcdt'; 
-
-  /// The display name shown to recipients in their email inbox.
   static const String _fromName = 'DutyDesk Invigilator System';
+
+  /// Google Apps Script Web App URL for email dispatch
+  static const String _defaultWebGatewayUrl =
+      'https://script.google.com/macros/s/AKfycbyZmP20s6AepuCxF81hPVhjWPDeQBWn6jvT54LOL9r9LlA-xfWwjhmnABoCyoEQ9Xl2/exec';
+
+  /// In-memory cache for Web Gateway URL
+  static String? _cachedGatewayUrl;
 
   // ==========================================
   // ✉️ EMAIL DISPATCH LOGIC
   // ==========================================
 
-  /// Sends a plain text email to the specified [toAddress].
-  /// Returns `true` if successful, otherwise throws an exception with descriptive SMTP logs.
+  /// Sends an email to the specified [toAddress].
+  /// On Web: Uses high-reliability browser dispatch (native fetch / XHR).
+  /// On Native: Uses HTTPS Web Gateway, falling back to direct Gmail SMTP socket.
   static Future<bool> sendEmail({
     required String toAddress,
     required String subject,
     required String bodyText,
   }) async {
-    debugPrint('SMTP: Attempting to send email to $toAddress...');
+    debugPrint('SMTP: Attempting to send email to $toAddress (Platform: ${kIsWeb ? "Web" : "Native"})...');
     
-    // 1. Establish the SMTP server config
+    // Resolve Gateway URL
+    String gatewayUrl = _cachedGatewayUrl ?? _defaultWebGatewayUrl;
+    if (_cachedGatewayUrl == null) {
+      try {
+        final doc = await FirebaseFirestore.instance.collection('settings').doc('smtp').get();
+        if (doc.exists && doc.data() != null) {
+          final dbUrl = doc.data()?['webGatewayUrl'] as String? ?? 
+                        doc.data()?['gatewayUrl'] as String?;
+          if (dbUrl != null && dbUrl.trim().isNotEmpty) {
+            gatewayUrl = dbUrl.trim();
+          }
+        }
+      } catch (e) {
+        debugPrint('SMTP: Could not read settings/smtp (using default): $e');
+      }
+      _cachedGatewayUrl = gatewayUrl;
+    }
+
+    // ── Web Platform Dispatch ──
+    if (kIsWeb) {
+      final success = await dispatchWebEmail(
+        url: gatewayUrl,
+        to: toAddress,
+        subject: subject,
+        body: bodyText,
+        fromName: _fromName,
+      );
+      if (success) {
+        debugPrint('SMTP: Web email delivered successfully!');
+        return true;
+      }
+      // Fallback via http.post in case dispatchWebEmail failed
+      return _sendViaHttpPost(
+        gatewayUrl: gatewayUrl,
+        toAddress: toAddress,
+        subject: subject,
+        bodyText: bodyText,
+      );
+    }
+
+    // ── Native Platform Dispatch ──
+    // Strategy 1: Fast HTTPS POST via Google Apps Script (immune to cellular port 465 blocking)
+    try {
+      final gatewaySuccess = await _sendViaHttpPost(
+        gatewayUrl: gatewayUrl,
+        toAddress: toAddress,
+        subject: subject,
+        bodyText: bodyText,
+      );
+      if (gatewaySuccess) {
+        debugPrint('SMTP Native: Email sent via gateway successfully!');
+        return true;
+      }
+    } catch (e) {
+      debugPrint('SMTP Native Gateway failed ($e), falling back to direct SMTP...');
+    }
+
+    // Strategy 2: Direct Gmail SMTP socket fallback
     final smtpServer = SmtpServer(
       _smtpHost,
       port: _smtpPort,
@@ -69,7 +107,6 @@ class SmtpEmailService {
       password: _password,
     );
 
-    // 2. Prepare the transactional message
     final message = Message()
       ..from = Address(_username, _fromName)
       ..recipients.add(toAddress)
@@ -77,9 +114,8 @@ class SmtpEmailService {
       ..text = bodyText;
 
     try {
-      // 3. Dispatch email
       final sendReport = await send(message, smtpServer);
-      debugPrint('SMTP: Email sent successfully! Report: $sendReport');
+      debugPrint('SMTP: Direct SMTP sent successfully! Report: $sendReport');
       return true;
     } on MailerException catch (e) {
       debugPrint('SMTP ERROR (MailerException): ${e.toString()}');
@@ -89,6 +125,37 @@ class SmtpEmailService {
       rethrow;
     } catch (e) {
       debugPrint('SMTP ERROR (General): $e');
+      rethrow;
+    }
+  }
+
+  /// Dispatches email using standard HTTP POST with text/plain content type.
+  static Future<bool> _sendViaHttpPost({
+    required String gatewayUrl,
+    required String toAddress,
+    required String subject,
+    required String bodyText,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse(gatewayUrl.trim()),
+        headers: {'Content-Type': 'text/plain;charset=utf-8'},
+        body: jsonEncode({
+          'to': toAddress,
+          'subject': subject,
+          'body': bodyText,
+          'fromName': _fromName,
+        }),
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 400) {
+        debugPrint('SMTP: Email sent successfully via HTTP POST! (${response.statusCode})');
+        return true;
+      } else {
+        throw Exception('Gateway returned status ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      debugPrint('SMTP HTTP POST Error: $e');
       rethrow;
     }
   }

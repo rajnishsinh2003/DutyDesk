@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/login_screen.dart';
+import '../../features/auth/presentation/forgot_password_screen.dart';
 import '../../features/auth/presentation/splash_screen.dart';
+import '../../features/landing/presentation/landing_screen.dart';
 import '../../features/admin/presentation/admin_dashboard.dart';
 import '../../features/admin/presentation/add_invigilator_screen.dart';
 import '../../features/admin/presentation/manage_invigilators_screen.dart';
@@ -34,15 +37,35 @@ import '../../features/cctv/presentation/cctv_monitor_screen.dart';
 import '../../features/portal/presentation/student_portal_screen.dart';
 
 final GoRouter appRouter = GoRouter(
-  initialLocation: '/splash',
+  initialLocation: kIsWeb ? '/' : '/splash',
   routes: [
+    GoRoute(
+      path: '/',
+      builder: (context, state) => const LandingScreen(),
+    ),
+    GoRoute(
+      path: '/home',
+      redirect: (context, state) => '/',
+    ),
+    GoRoute(
+      path: '/index',
+      redirect: (context, state) => '/',
+    ),
     GoRoute(
       path: '/splash',
       builder: (context, state) => const SplashScreen(),
+      redirect: (context, state) {
+        if (kIsWeb) return '/';
+        return null;
+      },
     ),
     GoRoute(
       path: '/login',
       builder: (context, state) => const LoginScreen(),
+    ),
+    GoRoute(
+      path: '/forgot_password',
+      builder: (context, state) => const ForgotPasswordScreen(),
     ),
     GoRoute(
       path: '/notifications',

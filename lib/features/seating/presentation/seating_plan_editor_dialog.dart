@@ -39,6 +39,7 @@ class _SeatingPlanEditorDialogState extends ConsumerState<SeatingPlanEditorDialo
   int _cseCount = 14;
   int _eceCount = 12;
   int _meCount = 6;
+  bool _isGenerating = false;
 
   @override
   void initState() {
@@ -67,40 +68,45 @@ class _SeatingPlanEditorDialogState extends ConsumerState<SeatingPlanEditorDialo
   }
 
   void _generateAndSave() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate() || _isGenerating) return;
 
+    setState(() => _isGenerating = true);
     HapticFeedback.mediumImpact();
 
-    final candidates = SeatingGeneratorEngine.generateSampleCandidates(
-      cseCount: _cseCount,
-      eceCount: _eceCount,
-      meCount: _meCount,
-    );
-
-    final newPlan = SeatingGeneratorEngine.generatePlan(
-      examName: _examNameCtrl.text.trim(),
-      sessionOrShift: _selectedShift,
-      date: _dateCtrl.text.trim(),
-      centerName: _centerNameCtrl.text.trim(),
-      roomName: _roomNameCtrl.text.trim(),
-      rows: _rows,
-      columns: _cols,
-      strategy: _selectedStrategy,
-      candidates: candidates,
-      bufferSeatCount: _bufferSeats,
-    );
-
-    await ref.read(seatingPlanProvider.notifier).savePlan(newPlan);
-
-    if (mounted) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('✅ Seating plan generated for ${_roomNameCtrl.text}!'),
-          backgroundColor: const Color(0xFF10B981),
-          behavior: SnackBarBehavior.floating,
-        ),
+    try {
+      final candidates = SeatingGeneratorEngine.generateSampleCandidates(
+        cseCount: _cseCount,
+        eceCount: _eceCount,
+        meCount: _meCount,
       );
+
+      final newPlan = SeatingGeneratorEngine.generatePlan(
+        examName: _examNameCtrl.text.trim(),
+        sessionOrShift: _selectedShift,
+        date: _dateCtrl.text.trim(),
+        centerName: _centerNameCtrl.text.trim(),
+        roomName: _roomNameCtrl.text.trim(),
+        rows: _rows,
+        columns: _cols,
+        strategy: _selectedStrategy,
+        candidates: candidates,
+        bufferSeatCount: _bufferSeats,
+      );
+
+      await ref.read(seatingPlanProvider.notifier).savePlan(newPlan);
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Seating plan generated for ${_roomNameCtrl.text}!'),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isGenerating = false);
     }
   }
 
@@ -488,15 +494,21 @@ class _SeatingPlanEditorDialogState extends ConsumerState<SeatingPlanEditorDialo
                   ),
                   const Spacer(),
                   ElevatedButton.icon(
-                    icon: const Icon(Icons.auto_awesome_rounded, size: 18),
-                    label: const Text('Generate Plan'),
+                    icon: _isGenerating
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.auto_awesome_rounded, size: 18),
+                    label: Text(_isGenerating ? 'Generating...' : 'Generate Plan'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2563EB),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    onPressed: _generateAndSave,
+                    onPressed: _isGenerating ? null : _generateAndSave,
                   ),
                 ],
               ),

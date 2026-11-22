@@ -5,6 +5,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:duty_desk/l10n/app_localizations.dart';
+import 'package:go_router/go_router.dart';
 import '../../invigilator/providers/duty_provider.dart';
 import '../providers/invigilator_provider.dart';
 import '../providers/center_provider.dart';
@@ -278,6 +279,17 @@ class _AdminPayrollScreenState extends ConsumerState<AdminPayrollScreen> with Si
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/admin_dashboard');
+            }
+          },
+        ),
         title: Text(s.payrollSalary, style: const TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(

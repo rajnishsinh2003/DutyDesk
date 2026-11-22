@@ -42,25 +42,40 @@ class _AddInvigilatorScreenState extends ConsumerState<AddInvigilatorScreen> {
     super.dispose();
   }
 
-  void _saveInvigilator() {
+  bool _isSaving = false;
+
+  void _saveInvigilator() async {
     final s = S.of(context)!;
     if (_formKey.currentState!.validate()) {
-      final name = _nameController.text.trim();
-      final mobile = _mobileController.text.trim();
-      final resourceId = _resourceIdController.text.trim();
-      final email = _emailController.text.trim();
-      final address = _addressController.text.trim();
+      setState(() => _isSaving = true);
+      try {
+        final name = _nameController.text.trim();
+        final mobile = _mobileController.text.trim();
+        final resourceId = _resourceIdController.text.trim();
+        final email = _emailController.text.trim();
+        final address = _addressController.text.trim();
 
-      if (widget.existingInvigilator == null) {
-        ref.read(invigilatorProvider.notifier).addInvigilator(name, mobile, resourceId, email, address);
-      } else {
-        ref.read(invigilatorProvider.notifier).updateInvigilator(widget.existingInvigilator!.id, name, mobile, resourceId, email, address);
+        if (widget.existingInvigilator == null) {
+          await ref.read(invigilatorProvider.notifier).addInvigilator(name, mobile, resourceId, email, address);
+        } else {
+          await ref.read(invigilatorProvider.notifier).updateInvigilator(widget.existingInvigilator!.id, name, mobile, resourceId, email, address);
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(widget.existingInvigilator == null ? s.invigilatorAddedSuccess : s.invigilatorUpdated)),
+          );
+          context.pop();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isSaving = false);
       }
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.existingInvigilator == null ? s.invigilatorAddedSuccess : s.invigilatorUpdated)),
-      );
-      context.pop();
     }
   }
 
@@ -71,6 +86,17 @@ class _AddInvigilatorScreenState extends ConsumerState<AddInvigilatorScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/admin_dashboard/manage_invigilators');
+            }
+          },
+        ),
         title: Text(isEditing ? s.editInvigilator : s.addInvigilator),
       ),
       body: SingleChildScrollView(
@@ -122,9 +148,20 @@ class _AddInvigilatorScreenState extends ConsumerState<AddInvigilatorScreen> {
               ),
               const SizedBox(height: 32),
               ElevatedButton(
-                onPressed: _saveInvigilator,
-                style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                child: Text(isEditing ? s.updateInvigilator : s.saveInvigilator, style: const TextStyle(fontSize: 16)),
+                onPressed: _isSaving ? null : _saveInvigilator,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  backgroundColor: const Color(0xFF007A87),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
+                      )
+                    : Text(isEditing ? s.updateInvigilator : s.saveInvigilator, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ],
           ),

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../models/audit_event_model.dart';
 import '../providers/audit_trail_provider.dart';
+import 'package:go_router/go_router.dart';
 
 class AuditTrailScreen extends ConsumerStatefulWidget {
   const AuditTrailScreen({super.key});
@@ -58,6 +59,17 @@ class _AuditTrailScreenState extends ConsumerState<AuditTrailScreen> {
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/admin_dashboard');
+            }
+          },
+        ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

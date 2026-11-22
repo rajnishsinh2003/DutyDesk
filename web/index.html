@@ -18,18 +18,18 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="DutyDesk - Intelligent Exam Invigilation & Allocation Management System">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="duty_desk">
+  <meta name="apple-mobile-web-app-title" content="DutyDesk">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>duty_desk</title>
+  <title>DutyDesk - Exam Invigilation Management System</title>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -41,6 +41,63 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
-  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    // Unregister legacy service workers and clear caches
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for (let registration of registrations) {
+          registration.unregister();
+        }
+      });
+    }
+    if ('caches' in window) {
+      caches.keys().then(function(names) {
+        for (let name of names) {
+          caches.delete(name);
+        }
+      });
+    }
+
+    // High-reliability Web Email Dispatcher via Google Apps Script Web App
+    window.dutyDeskSendEmail = function(to, subject, body, fromName, callback) {
+      var url = 'https://script.google.com/macros/s/AKfycbyZmP20s6AepuCxF81hPVhjWPDeQBWn6jvT54LOL9r9LlA-xfWwjhmnABoCyoEQ9Xl2/exec';
+      var payload = JSON.stringify({
+        to: to,
+        subject: subject,
+        body: body,
+        fromName: fromName || 'DutyDesk Invigilator System'
+      });
+
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: payload
+      })
+      .then(function(response) {
+        return response.text().then(function(txt) {
+          if (callback) callback(true, txt);
+        });
+      })
+      .catch(function(err) {
+        console.error('dutyDeskSendEmail fetch failed:', err);
+        // Fallback: try via XMLHttpRequest
+        try {
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', url, true);
+          xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
+          xhr.onload = function() {
+            if (callback) callback(xhr.status >= 200 && xhr.status < 400, xhr.responseText);
+          };
+          xhr.onerror = function(e) {
+            if (callback) callback(false, 'XHR Error: ' + xhr.status);
+          };
+          xhr.send(payload);
+        } catch (e2) {
+          if (callback) callback(false, e2.toString());
+        }
+      });
+    };
+  </script>
+  <script src="flutter_bootstrap.js?v=20261107_otp2" async></script>
 </body>
 </html>

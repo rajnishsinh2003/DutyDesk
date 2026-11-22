@@ -34,6 +34,7 @@ class _PacketUnsealDialogState extends ConsumerState<PacketUnsealDialog> {
 
   bool _isSealInspected = false;
   bool _isBookletCountConfirmed = false;
+  bool _isSubmitting = false;
   Timer? _countdownTimer;
 
   @override
@@ -60,7 +61,7 @@ class _PacketUnsealDialogState extends ConsumerState<PacketUnsealDialog> {
   }
 
   void _submitUnseal() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate() || _isSubmitting) return;
     if (!_isSealInspected || !_isBookletCountConfirmed) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -71,39 +72,44 @@ class _PacketUnsealDialogState extends ConsumerState<PacketUnsealDialog> {
       return;
     }
 
+    setState(() => _isSubmitting = true);
     HapticFeedback.heavyImpact();
 
-    final witnesses = [
-      StudentWitness(
-        name: _w1NameCtrl.text.trim(),
-        rollNumber: _w1RollCtrl.text.trim(),
-        witnessedAt: DateTime.now(),
-      ),
-      StudentWitness(
-        name: _w2NameCtrl.text.trim(),
-        rollNumber: _w2RollCtrl.text.trim(),
-        witnessedAt: DateTime.now(),
-      ),
-    ];
+    try {
+      final witnesses = [
+        StudentWitness(
+          name: _w1NameCtrl.text.trim(),
+          rollNumber: _w1RollCtrl.text.trim(),
+          witnessedAt: DateTime.now(),
+        ),
+        StudentWitness(
+          name: _w2NameCtrl.text.trim(),
+          rollNumber: _w2RollCtrl.text.trim(),
+          witnessedAt: DateTime.now(),
+        ),
+      ];
 
-    final success = await ref.read(questionPaperProvider.notifier).unsealPacket(
-      packetId: widget.packet.id,
-      unsealedByName: _invigilatorNameCtrl.text.trim(),
-      witnesses: witnesses,
-      forceOverride: !widget.packet.isWithinUnsealWindow, // allows supervisor override if tested
-    );
+      final success = await ref.read(questionPaperProvider.notifier).unsealPacket(
+        packetId: widget.packet.id,
+        unsealedByName: _invigilatorNameCtrl.text.trim(),
+        witnesses: witnesses,
+        forceOverride: !widget.packet.isWithinUnsealWindow, // allows supervisor override if tested
+      );
 
-    if (mounted) {
-      Navigator.pop(context);
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('🎉 Packet ${widget.packet.packetCode} successfully unsealed!'),
-            backgroundColor: const Color(0xFF10B981),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      if (mounted) {
+        Navigator.pop(context);
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('🎉 Packet ${widget.packet.packetCode} successfully unsealed!'),
+              backgroundColor: const Color(0xFF10B981),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
       }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -416,8 +422,16 @@ class _PacketUnsealDialogState extends ConsumerState<PacketUnsealDialog> {
                   ),
                   const Spacer(),
                   ElevatedButton.icon(
-                    icon: const Icon(Icons.lock_open_rounded, size: 18),
-                    label: Text(isLocked ? 'Override & Unseal' : 'Verify & Unseal Now'),
+                    icon: _isSubmitting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.lock_open_rounded, size: 18),
+                    label: Text(_isSubmitting
+                        ? 'Unsealing...'
+                        : (isLocked ? 'Override & Unseal' : 'Verify & Unseal Now')),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: isWindowOpen
                           ? const Color(0xFF10B981)
@@ -426,7 +440,7 @@ class _PacketUnsealDialogState extends ConsumerState<PacketUnsealDialog> {
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    onPressed: _submitUnseal,
+                    onPressed: _isSubmitting ? null : _submitUnseal,
                   ),
                 ],
               ),

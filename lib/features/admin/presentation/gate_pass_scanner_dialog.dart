@@ -2,7 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:camera/camera.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:intl/intl.dart';
 import '../../invigilator/providers/duty_provider.dart';
 import '../providers/invigilator_provider.dart';
 
@@ -26,10 +28,7 @@ class GatePassScannerDialog extends ConsumerStatefulWidget {
 
 class _GatePassScannerDialogState extends ConsumerState<GatePassScannerDialog>
     with SingleTickerProviderStateMixin {
-  CameraController? _cameraController;
-  List<CameraDescription>? _availableCameras;
-  bool _isCameraReady = false;
-
+  late final MobileScannerController _scannerController;
   late AnimationController _sweepCtrl;
   late Animation<double> _sweepAnim;
 
@@ -38,10 +37,19 @@ class _GatePassScannerDialogState extends ConsumerState<GatePassScannerDialog>
   Invigilator? _scannedInvigilator;
   bool _isCenterMatch = true;
   String? _scanMessage;
+  bool _isAdmitting = false;
+  bool _isScanning = false;
+  String? _lastScannedPayload;
 
   @override
   void initState() {
     super.initState();
+    _scannerController = MobileScannerController(
+      detectionSpeed: DetectionSpeed.normal,
+      facing: CameraFacing.back,
+      torchEnabled: false,
+    );
+
     _sweepCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -50,79 +58,103 @@ class _GatePassScannerDialogState extends ConsumerState<GatePassScannerDialog>
     _sweepAnim = Tween<double>(begin: 0.1, end: 0.9).animate(
       CurvedAnimation(parent: _sweepCtrl, curve: Curves.easeInOut),
     );
-
-    _initCamera();
-  }
-
-  Future<void> _initCamera() async {
-    try {
-      _availableCameras = await availableCameras();
-      if (_availableCameras != null && _availableCameras!.isNotEmpty) {
-        // Prefer rear camera for gate barcode/QR scanning
-        final backIndex = _availableCameras!.indexWhere(
-          (c) => c.lensDirection == CameraLensDirection.back,
-        );
-        final desc = _availableCameras![backIndex != -1 ? backIndex : 0];
-
-        final controller = CameraController(
-          desc,
-          ResolutionPreset.medium,
-          enableAudio: false,
-        );
-
-        await controller.initialize();
-        if (mounted) {
-          setState(() {
-            _cameraController = controller;
-            _isCameraReady = true;
-          });
-        }
-      }
-    } catch (_) {
-      if (mounted) setState(() => _isCameraReady = false);
-    }
   }
 
   @override
   void dispose() {
     _sweepCtrl.dispose();
-    _cameraController?.dispose();
+    _scannerController.dispose();
     _manualInputCtrl.dispose();
     super.dispose();
   }
 
-  void _processScannedPayload(String payload) {
+  Future<void> _processScannedPayload(String payload) async {
+    final clean = payload.trim();
+    if (clean.isEmpty || _isScanning) return;
+    if (_lastScannedPayload == clean && _scannedDuty != null) return;
+
+    _isScanning = true;
+    _lastScannedPayload = clean;
     HapticFeedback.mediumImpact();
+
     final allDuties = ref.read(globalDutyProvider);
     final allInvs = ref.read(invigilatorProvider);
 
-    // Payload can be: "DUTYDESK|<dutyId>|<resourceId>|<center>|<date>|<shift>" or just a Resource ID / Duty ID
-    String query = payload.trim();
+    // Payload format: "DUTYDESK|<dutyId>|<resourceId>|<center>|<date>|<shift>" or raw ID
+    String query = clean;
+    String? expectedResourceId;
     if (query.startsWith('DUTYDESK|')) {
       final parts = query.split('|');
+      if (parts.length >= 2) {
+        query = parts[1].trim(); // dutyId
+      }
       if (parts.length >= 3) {
-        query = parts[1]; // dutyId
+        expectedResourceId = parts[2].trim();
       }
     }
 
     ExamDuty? matchedDuty;
     Invigilator? matchedInv;
 
-    // Search by duty ID first
+    // 1. Search by duty ID in global duties
     try {
       matchedDuty = allDuties.firstWhere((d) => d.id.toLowerCase() == query.toLowerCase());
     } catch (_) {}
 
-    // Search by resource ID if duty wasn't found directly
-    if (matchedDuty == null) {
+    // 2. Direct Firestore fallback if duty not cached yet
+    if (matchedDuty == null && query.isNotEmpty) {
       try {
-        matchedInv = allInvs.firstWhere((i) => i.resourceId.toLowerCase() == query.toLowerCase());
+        final doc = await FirebaseFirestore.instance.collection('duties').doc(query).get();
+        if (doc.exists && doc.data() != null) {
+          matchedDuty = ExamDuty.fromFirestore(doc.id, doc.data()!);
+        }
+      } catch (_) {}
+    }
+
+    // 3. Search by resource ID if duty wasn't matched directly
+    if (matchedDuty == null && (expectedResourceId != null || query.isNotEmpty)) {
+      final targetResId = expectedResourceId ?? query;
+      try {
+        matchedInv = allInvs.firstWhere((i) => i.resourceId.toLowerCase() == targetResId.toLowerCase());
         matchedDuty = allDuties.firstWhere((d) => d.invigilatorId == matchedInv?.id);
       } catch (_) {}
-    } else {
+
+      // Fallback Firestore query for duties by invigilator
+      if (matchedDuty == null && matchedInv != null) {
+        try {
+          final querySnap = await FirebaseFirestore.instance
+              .collection('duties')
+              .where('invigilatorId', isEqualTo: matchedInv.id)
+              .limit(1)
+              .get();
+          if (querySnap.docs.isNotEmpty) {
+            matchedDuty = ExamDuty.fromFirestore(querySnap.docs.first.id, querySnap.docs.first.data());
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 4. Resolve invigilator details
+    if (matchedDuty != null) {
       try {
-        matchedInv = allInvs.firstWhere((i) => i.id == matchedDuty?.invigilatorId);
+        matchedInv = allInvs.firstWhere((i) => i.id == matchedDuty!.invigilatorId);
       } catch (_) {}
+
+      if (matchedInv == null) {
+        try {
+          final userDoc = await FirebaseFirestore.instance.collection('users').doc(matchedDuty.invigilatorId).get();
+          if (userDoc.exists && userDoc.data() != null) {
+            final data = userDoc.data()!;
+            matchedInv = Invigilator(
+              id: userDoc.id,
+              name: data['name'] ?? 'Invigilator',
+              resourceId: data['resourceId'] ?? expectedResourceId ?? '',
+              mobile: data['phone'] ?? data['mobile'] ?? '',
+              mockDutyCount: 0,
+            );
+          }
+        } catch (_) {}
+      }
     }
 
     if (matchedDuty != null && matchedInv != null) {
@@ -130,44 +162,81 @@ class _GatePassScannerDialogState extends ConsumerState<GatePassScannerDialog>
           widget.activeCenterName!.trim().isEmpty ||
           matchedDuty.centerName.toLowerCase() == widget.activeCenterName!.toLowerCase();
 
-      setState(() {
-        _scannedDuty = matchedDuty;
-        _scannedInvigilator = matchedInv;
-        _isCenterMatch = centerMatches;
-        _scanMessage = centerMatches
-            ? 'VERIFIED: Authorized for Gate Entry'
-            : 'CENTER MISMATCH: Assigned to ${matchedDuty?.centerName}';
-      });
+      if (mounted) {
+        setState(() {
+          _scannedDuty = matchedDuty;
+          _scannedInvigilator = matchedInv;
+          _isCenterMatch = centerMatches;
+          _scanMessage = centerMatches
+              ? 'VERIFIED: Authorized for Gate Entry'
+              : 'CENTER MISMATCH: Assigned to ${matchedDuty?.centerName}';
+        });
+      }
     } else {
-      setState(() {
-        _scannedDuty = null;
-        _scannedInvigilator = null;
-        _scanMessage = 'No active duty schedule found matching "$query"';
-      });
+      if (mounted) {
+        setState(() {
+          _scannedDuty = null;
+          _scannedInvigilator = null;
+          _scanMessage = 'No active duty schedule found matching "$query"';
+        });
+      }
     }
+
+    // Small delay before allowing next scan
+    await Future.delayed(const Duration(milliseconds: 800));
+    _isScanning = false;
   }
 
   Future<void> _admitStaff() async {
-    if (_scannedDuty == null || _scannedInvigilator == null) return;
+    if (_scannedDuty == null || _scannedInvigilator == null || _isAdmitting) return;
+    setState(() => _isAdmitting = true);
     HapticFeedback.heavyImpact();
 
-    // Mark duty as reached/admitted at gate
-    final notifier = ref.read(dutyProvider.notifier);
-    await notifier.updateDutyStatus(_scannedDuty!.id, 'accepted');
+    try {
+      final now = DateTime.now();
+      final timeStr = DateFormat('hh:mm a').format(now);
+      final dateStr = DateFormat('yyyy-MM-dd').format(now);
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('✅ ${_scannedInvigilator!.name} admitted and gate attendance logged!'),
-          backgroundColor: const Color(0xFF10B981),
-        ),
-      );
-      Navigator.of(context).pop();
+      // 1. Mark duty accepted & reached at gate
+      await FirebaseFirestore.instance.collection('duties').doc(_scannedDuty!.id).update({
+        'status': 'accepted',
+        'isReached': true,
+        'reachedAt': FieldValue.serverTimestamp(),
+        'reachedTime': timeStr,
+        'reachedDate': dateStr,
+        'reachedPerformance': 'Excellent',
+        'reachedMessage': 'Admitted and gate verified by Center Superintendent',
+      });
+
+      // 2. Update local state
+      ref.read(dutyProvider.notifier).updateDutyStatus(_scannedDuty!.id, 'accepted');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ ${_scannedInvigilator!.name} admitted and gate attendance logged!'),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error admitting staff: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isAdmitting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Keep subscriptions alive
+    ref.watch(globalDutyProvider);
+    ref.watch(invigilatorProvider);
+
     const brandColor = Color(0xFF007A87);
     const verifiedColor = Color(0xFF10B981);
     const errorColor = Color(0xFFEF4444);
@@ -192,7 +261,7 @@ class _GatePassScannerDialogState extends ConsumerState<GatePassScannerDialog>
             children: [
               // Header
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: const BoxDecoration(
                   color: Color(0xFF007A87),
                   borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
@@ -219,6 +288,16 @@ class _GatePassScannerDialogState extends ConsumerState<GatePassScannerDialog>
                       ),
                     ),
                     IconButton(
+                      icon: const Icon(Icons.flash_on, color: Colors.white, size: 20),
+                      tooltip: 'Toggle Flashlight',
+                      onPressed: () => _scannerController.toggleTorch(),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.cameraswitch_outlined, color: Colors.white, size: 20),
+                      tooltip: 'Switch Camera',
+                      onPressed: () => _scannerController.switchCamera(),
+                    ),
+                    IconButton(
                       icon: const Icon(Icons.close, color: Colors.white, size: 20),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
@@ -232,7 +311,7 @@ class _GatePassScannerDialogState extends ConsumerState<GatePassScannerDialog>
                 padding: const EdgeInsets.all(18),
                 child: Column(
                   children: [
-                    // Viewport / Reticle Box
+                    // Viewport / Reticle Box with live MobileScanner
                     ClipRRect(
                       borderRadius: BorderRadius.circular(16),
                       child: Container(
@@ -241,22 +320,38 @@ class _GatePassScannerDialogState extends ConsumerState<GatePassScannerDialog>
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
-                            // Live rear camera
-                            if (_isCameraReady && _cameraController != null)
-                              SizedBox.expand(
-                                child: FittedBox(
-                                  fit: BoxFit.cover,
-                                  child: SizedBox(
-                                    width: _cameraController!.value.previewSize?.height ?? 220,
-                                    height: _cameraController!.value.previewSize?.width ?? 220,
-                                    child: CameraPreview(_cameraController!),
+                            // Live MobileScanner Engine
+                            MobileScanner(
+                              controller: _scannerController,
+                              onDetect: (BarcodeCapture capture) {
+                                for (final barcode in capture.barcodes) {
+                                  final raw = barcode.rawValue;
+                                  if (raw != null && raw.isNotEmpty) {
+                                    _processScannedPayload(raw);
+                                    break;
+                                  }
+                                }
+                              },
+                              errorBuilder: (context, error) {
+                                return Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.no_photography_outlined, color: Colors.white38, size: 36),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          'Camera unavailable (${error.errorCode.name}). Use manual input below.',
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              )
-                            else
-                              const Center(
-                                child: Icon(Icons.qr_code_2, size: 80, color: Colors.white12),
-                              ),
+                                );
+                              },
+                            ),
 
                             // Targeting Reticle Outline
                             Container(
@@ -387,31 +482,100 @@ class _GatePassScannerDialogState extends ConsumerState<GatePassScannerDialog>
                               ],
                             ),
                             const Divider(color: Colors.white12, height: 16),
-                            Text(
-                              _scannedInvigilator!.name,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (_scannedInvigilator!.faceFrontUrl != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 12),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: Image.network(
+                                        _scannedInvigilator!.faceFrontUrl!,
+                                        width: 54,
+                                        height: 64,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => Container(
+                                          width: 54,
+                                          height: 64,
+                                          color: Colors.white12,
+                                          child: const Icon(Icons.person, color: Colors.white54, size: 30),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              _scannedInvigilator!.name,
+                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                                            ),
+                                          ),
+                                          if (_scannedInvigilator!.isFaceEnrolled)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: Colors.green.withValues(alpha: 0.2),
+                                                borderRadius: BorderRadius.circular(6),
+                                                border: Border.all(color: Colors.green.shade400, width: 0.8),
+                                              ),
+                                              child: const Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(Icons.verified, size: 10, color: Color(0xFF10B981)),
+                                                  SizedBox(width: 3),
+                                                  Text('Face Verified', style: TextStyle(color: Color(0xFF10B981), fontSize: 9.5, fontWeight: FontWeight.bold)),
+                                                ],
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        'Resource ID: ${_scannedInvigilator!.resourceId} • ${_scannedDuty!.examName}',
+                                        style: TextStyle(color: Colors.grey.shade300, fontSize: 11),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Center: ${_scannedDuty!.centerName}',
+                                        style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 3),
+                            const SizedBox(height: 4),
                             Text(
-                              'Resource ID: ${_scannedInvigilator!.resourceId} • ${_scannedDuty!.examName}',
-                              style: TextStyle(color: Colors.grey.shade300, fontSize: 11),
-                            ),
-                            Text(
-                              'Shift ${_scannedDuty!.shift} • Reporting: ${_scannedDuty!.reportingTime}',
+                              'Shift ${_scannedDuty!.shift} • Reporting: ${_scannedDuty!.reportingTime} • Exam: ${_scannedDuty!.dutyStartTime} - ${_scannedDuty!.dutyEndTime}',
                               style: const TextStyle(color: Color(0xFF22D3EE), fontSize: 11, fontWeight: FontWeight.w600),
                             ),
                             const SizedBox(height: 12),
                             if (_isCenterMatch)
                               ElevatedButton.icon(
-                                icon: const Icon(Icons.check_circle_outline, size: 18),
-                                label: const Text('Admit Staff & Confirm Gate Entry', style: TextStyle(fontWeight: FontWeight.bold)),
+                                icon: _isAdmitting
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                      )
+                                    : const Icon(Icons.check_circle_outline, size: 18),
+                                label: Text(
+                                  _isAdmitting ? 'Logging Entry...' : 'Admit Staff & Confirm Gate Entry',
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: verifiedColor,
                                   foregroundColor: Colors.white,
                                   minimumSize: const Size.fromHeight(42),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                 ),
-                                onPressed: _admitStaff,
+                                onPressed: _isAdmitting ? null : _admitStaff,
                               ),
                           ],
                         ),

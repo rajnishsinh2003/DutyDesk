@@ -22,6 +22,12 @@ class Invigilator {
   final String? standbyForCenter;
   final double? latitude;
   final double? longitude;
+  // Biometric Face Fields (Supabase + Firebase)
+  final bool isFaceEnrolled;
+  final String? faceFrontUrl;
+  final String? faceLeftUrl;
+  final String? faceRightUrl;
+  final DateTime? faceEnrolledAt;
 
   Invigilator({
     required this.id,
@@ -40,6 +46,11 @@ class Invigilator {
     this.standbyForCenter,
     this.latitude,
     this.longitude,
+    this.isFaceEnrolled = false,
+    this.faceFrontUrl,
+    this.faceLeftUrl,
+    this.faceRightUrl,
+    this.faceEnrolledAt,
   });
 
   Invigilator copyWith({
@@ -77,6 +88,11 @@ class Invigilator {
       standbyForCenter: standbyForCenter ?? this.standbyForCenter,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
+      isFaceEnrolled: isFaceEnrolled ?? this.isFaceEnrolled,
+      faceFrontUrl: faceFrontUrl ?? this.faceFrontUrl,
+      faceLeftUrl: faceLeftUrl ?? this.faceLeftUrl,
+      faceRightUrl: faceRightUrl ?? this.faceRightUrl,
+      faceEnrolledAt: faceEnrolledAt ?? this.faceEnrolledAt,
     );
   }
 }
@@ -98,7 +114,13 @@ class InvigilatorNotifier extends Notifier<List<Invigilator>> {
       state = snapshot.docs.map((doc) {
         final data = doc.data();
         final Timestamp? timestamp = data['lastMockAssignedDate'];
+        final Timestamp? faceEnrolledTs = data['faceEnrolledAt'];
         final List<dynamic> datesRaw = data['unavailableDates'] ?? [];
+        final bool faceEnrolled = data['isFaceEnrolled'] == true ||
+            data['faceVerified'] == true ||
+            data['faceFrontUrl'] != null ||
+            data['facePhotoUrl'] != null;
+
         return Invigilator(
           id: doc.id,
           name: data['name'] ?? '',
@@ -110,12 +132,17 @@ class InvigilatorNotifier extends Notifier<List<Invigilator>> {
           lastMockAssignedDate: timestamp?.toDate(),
           isActive: data['isActive'] ?? true,
           unavailableDates: datesRaw.map((e) => e.toString()).toList(),
-          photoUrl: data['photoUrl'],
+          photoUrl: data['faceFrontUrl'] ?? data['facePhotoUrl'] ?? data['photoUrl'],
           isStandby: data['isStandby'] ?? false,
           standbyForDate: data['standbyForDate'],
           standbyForCenter: data['standbyForCenter'],
           latitude: (data['latitude'] as num?)?.toDouble(),
           longitude: (data['longitude'] as num?)?.toDouble(),
+          isFaceEnrolled: faceEnrolled,
+          faceFrontUrl: data['faceFrontUrl'] ?? data['facePhotoUrl'],
+          faceLeftUrl: data['faceLeftUrl'],
+          faceRightUrl: data['faceRightUrl'],
+          faceEnrolledAt: faceEnrolledTs?.toDate(),
         );
       }).toList();
     }, onError: (error) {

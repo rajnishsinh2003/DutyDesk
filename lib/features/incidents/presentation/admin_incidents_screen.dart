@@ -6,6 +6,7 @@ import '../models/incident_model.dart';
 import '../providers/incident_provider.dart';
 import '../services/incident_report_service.dart';
 import '../../auth/auth_provider.dart';
+import 'package:go_router/go_router.dart';
 
 class AdminIncidentsScreen extends ConsumerStatefulWidget {
   const AdminIncidentsScreen({super.key});
@@ -448,6 +449,17 @@ class _AdminIncidentsScreenState extends ConsumerState<AdminIncidentsScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/admin_dashboard');
+            }
+          },
+        ),
         title: const Text('Incident Management', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(

@@ -21,6 +21,7 @@ import '../../../core/services/offline_sync_service.dart';
 import '../../incidents/providers/incident_provider.dart';
 import 'face_verification_dialog.dart';
 import 'digital_gate_pass_dialog.dart';
+import '../../face_verification/presentation/multi_angle_face_enrollment_dialog.dart';
 import '../../../core/services/ble_beacon_service.dart';
 
 class InvigilatorDashboardScreen extends ConsumerStatefulWidget {
@@ -34,6 +35,7 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
   int _currentTab = 0;
   DateTime _calendarMonth = DateTime.now();
   LocationStatusResult? _locationStatus;
+  bool _faceEnrollmentDialogShown = false;
 
   @override
   void initState() {
@@ -55,7 +57,330 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
           ),
         );
       }
+      // Check mandatory face enrollment after short delay for data to load
+      Future.delayed(const Duration(milliseconds: 800), () {
+        if (mounted) _checkMandatoryFaceEnrollment();
+      });
     });
+  }
+
+  /// Shows a mandatory, non-dismissible dialog if biometric face enrollment
+  /// has not been completed. The dialog blocks all duty access until enrollment
+  /// is finished.
+  void _checkMandatoryFaceEnrollment() {
+    if (_faceEnrollmentDialogShown) return;
+    final auth = ref.read(authProvider);
+    final invs = ref.read(invigilatorProvider);
+    final matchingInvs = invs.where((i) => i.id == auth.userId).toList();
+    if (matchingInvs.isEmpty) return; // data not loaded yet
+    final currentInv = matchingInvs.first;
+    if (currentInv.isFaceEnrolled) return; // already enrolled
+
+    _faceEnrollmentDialogShown = true;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black87,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+        final titleColor = isDark ? Colors.white : const Color(0xFF0F172A);
+        final subtitleColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+        final policyBg = isDark ? const Color(0xFF0F172A) : const Color(0xFFFEF2F2);
+        final policyBorder = isDark ? const Color(0xFFEF4444).withValues(alpha: 0.3) : const Color(0xFFFECACA);
+        final privacyBg = isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9);
+        final privacyBorder = isDark ? Colors.white.withValues(alpha: 0.08) : Colors.transparent;
+
+        return PopScope(
+          canPop: false,
+          child: Dialog(
+            backgroundColor: cardBg,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.transparent,
+              ),
+            ),
+            insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+            clipBehavior: Clip.antiAlias,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 420,
+                maxHeight: MediaQuery.of(ctx).size.height * 0.85,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Scrollable Content
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Biometric Icon
+                          Container(
+                            width: 62,
+                            height: 62,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFFDC2626), Color(0xFFEF4444)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFDC2626).withValues(alpha: 0.35),
+                                  blurRadius: 14,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(Icons.face_retouching_natural_rounded, size: 32, color: Colors.white),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Biometric Face Enrollment Required',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: titleColor,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xFFDC2626).withValues(alpha: 0.25)
+                                  : const Color(0xFFDC2626).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: isDark
+                                    ? const Color(0xFFDC2626).withValues(alpha: 0.45)
+                                    : Colors.transparent,
+                              ),
+                            ),
+                            child: Text(
+                              'MANDATORY — Action Required',
+                              style: TextStyle(
+                                color: isDark ? const Color(0xFFFCA5A5) : const Color(0xFFDC2626),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 10.5,
+                                letterSpacing: 0.6,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          // Policy info card
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: policyBg,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: policyBorder),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'As per institutional policy, all invigilators must complete biometric face verification before accessing any exam duty features.',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: isDark ? const Color(0xFFFCA5A5) : const Color(0xFF7F1D1D),
+                                    height: 1.4,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  'You are required to capture 3 face angles:',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? const Color(0xFFFECACA) : const Color(0xFF991B1B),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                _buildStepRow('1', 'Front Face — Look straight at camera', isDark: isDark),
+                                _buildStepRow('2', 'Left Profile — Turn head ~30° left', isDark: isDark),
+                                _buildStepRow('3', 'Right Profile — Turn head ~30° right', isDark: isDark),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          // Privacy note
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: privacyBg,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: privacyBorder),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.privacy_tip_outlined, size: 16, color: subtitleColor),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Your photos are securely stored and used exclusively for identity verification during exam duties.',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: subtitleColor,
+                                      height: 1.3,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Divider
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.grey.shade200,
+                  ),
+
+                  // Pinned bottom action buttons with SafeArea (Guaranteed visible and clickable on any screen)
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
+                    color: cardBg,
+                    child: SafeArea(
+                      top: false,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.camera_enhance_rounded, size: 18),
+                              label: const Text(
+                                'Complete Face Enrollment',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF007A87),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              onPressed: () async {
+                                final enrolled = await MultiAngleFaceEnrollmentDialog.show(
+                                  ctx,
+                                  staffDocId: currentInv.id,
+                                  staffName: currentInv.name,
+                                  resourceId: currentInv.resourceId,
+                                  existingFrontUrl: currentInv.faceFrontUrl,
+                                  existingLeftUrl: currentInv.faceLeftUrl,
+                                  existingRightUrl: currentInv.faceRightUrl,
+                                );
+                                if (enrolled == true && ctx.mounted) {
+                                  Navigator.of(ctx).pop();
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Row(
+                                          children: [
+                                            Icon(Icons.verified_user_rounded, color: Colors.white),
+                                            SizedBox(width: 8),
+                                            Expanded(child: Text('✅ Face ID enrolled! All duty features unlocked.')),
+                                          ],
+                                        ),
+                                        backgroundColor: Color(0xFF10B981),
+                                        duration: Duration(seconds: 4),
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 38,
+                            child: OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(
+                                  color: isDark ? Colors.white.withValues(alpha: 0.15) : Colors.grey.shade300,
+                                ),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              onPressed: () {
+                                Navigator.of(ctx).pop();
+                                ref.read(authProvider.notifier).logout();
+                                if (mounted) context.go('/login');
+                              },
+                              child: Text(
+                                'Sign Out Instead',
+                                style: TextStyle(
+                                  color: subtitleColor,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStepRow(String step, String label, {required bool isDark}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 22,
+            height: 22,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? const Color(0xFFDC2626).withValues(alpha: 0.3)
+                  : const Color(0xFFDC2626).withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              step,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: isDark ? const Color(0xFFFCA5A5) : const Color(0xFFDC2626),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
+                color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF7F1D1D),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _checkLocationStatus() async {
@@ -457,7 +782,69 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
     );
   }
 
+  void _showCannotExitDialog(ExamDuty duty) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.lock_rounded, color: Colors.orange, size: 24),
+            SizedBox(width: 8),
+            Text('Exit Disabled', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Exam session is currently in progress. Invigilators are not permitted to exit or clock out from the examination center before the duty completion time.',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF7C3AED).withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF7C3AED).withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.schedule, size: 16, color: Color(0xFF7C3AED)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Duty End Time: ${duty.dutyEndTime}',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF7C3AED)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF007A87),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Understood'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _handleDutyClockOut(ExamDuty duty) async {
+    if (!duty.isExamCompleted) {
+      _showCannotExitDialog(duty);
+      return;
+    }
     final s = S.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
     final confirmed = await showDialog<bool>(
@@ -775,6 +1162,17 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
     return Scaffold(
       backgroundColor: screenBgColor,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/login');
+            }
+          },
+        ),
         title: Text(_getTabTitle(s), style: const TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           // In-App Notification Center Icon with Live Badge
@@ -1084,6 +1482,101 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
             const SizedBox(height: 16),
           ],
 
+          // MANDATORY FACE ENROLLMENT BANNER (blocks duty access)
+          if (!currentInv.isFaceEnrolled) ...[
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [const Color(0xFFFEF2F2), Colors.red.shade50],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFFCA5A5), width: 1.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.red.withValues(alpha: 0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDC2626).withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.face_retouching_natural_rounded, color: Color(0xFFDC2626), size: 22),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Biometric Face ID Not Enrolled',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF991B1B)),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Duty access is restricted until you complete 3-angle face enrollment.',
+                              style: TextStyle(fontSize: 11.5, color: Color(0xFFB91C1C), height: 1.3),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.camera_enhance_rounded, size: 16),
+                      label: const Text('Enroll Face Now', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFDC2626),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        elevation: 0,
+                      ),
+                      onPressed: () async {
+                        final enrolled = await MultiAngleFaceEnrollmentDialog.show(
+                          context,
+                          staffDocId: currentInv.id,
+                          staffName: currentInv.name,
+                          resourceId: currentInv.resourceId,
+                        );
+                        if (enrolled == true && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Row(
+                                children: [
+                                  Icon(Icons.verified_user_rounded, color: Colors.white),
+                                  SizedBox(width: 8),
+                                  Expanded(child: Text('✅ Face ID enrolled! All duty features are now unlocked.')),
+                                ],
+                              ),
+                              backgroundColor: Color(0xFF10B981),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           // 2. TODAY'S DUTY SECTION (With REACHED Button & Arrival Evaluation)
           if (todaysDutyList.isNotEmpty) ...[
             Row(
@@ -1204,6 +1697,15 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                 Text('Good Until: ${duty.goodUntil}', style: TextStyle(fontSize: 13, color: Colors.orange.shade700, fontWeight: FontWeight.w600)),
               ],
             ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const SizedBox(width: 2),
+                const Icon(Icons.timer_outlined, size: 14, color: Color(0xFF7C3AED)),
+                const SizedBox(width: 6),
+                Text('Exam Time: ${duty.dutyStartTime} - ${duty.dutyEndTime}', style: const TextStyle(fontSize: 13, color: Color(0xFF7C3AED), fontWeight: FontWeight.w600)),
+              ],
+            ),
             const Divider(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1220,22 +1722,129 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
               const SizedBox(height: 6),
               Text('${s.lunchProvision}: ${duty.lunch == "Yes" ? s.yes : s.no}', style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
             ],
-            const SizedBox(height: 18),
+
+            // ACCEPTANCE BANNER: For pending duties, show Accept / Reject right away
+            if (duty.status == 'pending') ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade600, width: 1),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.pending_actions_rounded, color: Colors.amber.shade800, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Duty Acceptance Required',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.amber.shade900),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Please accept this duty to unlock Center Navigation and enable the Reached button.',
+                      style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => ref.read(dutyProvider.notifier).updateDutyStatus(duty.id, 'rejected'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red,
+                              side: const BorderSide(color: Colors.red),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            child: Text(s.reject),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () => ref.read(dutyProvider.notifier).updateDutyStatus(duty.id, 'accepted'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            child: Text(s.accept),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
 
             // REACHED BUTTON OR REACHED STATUS
-            if (!isReached)
+            if (!isReached) ...[
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.location_pin, size: 20),
                   label: Text(s.reached, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF007A87),
+                    backgroundColor: duty.status == 'accepted' ? const Color(0xFF007A87) : Colors.grey.shade600,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: () async {
+                  onPressed: duty.status == 'accepted'
+                      ? () async {
+                    // 0. Mandatory Face Enrollment Gate
+                    if (!currentInv.isFaceEnrolled) {
+                      if (!mounted) return;
+                      final shouldEnroll = await showDialog<bool>(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (ctx) => AlertDialog(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          icon: const Icon(Icons.face_retouching_natural_rounded, color: Color(0xFFDC2626), size: 40),
+                          title: const Text('Face Enrollment Required', style: TextStyle(fontWeight: FontWeight.bold)),
+                          content: const Text(
+                            'You must complete biometric face enrollment before marking attendance. This is mandatory for all invigilators to prevent proxy attendance.',
+                            style: TextStyle(fontSize: 13.5, height: 1.5),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                            ),
+                            ElevatedButton.icon(
+                              icon: const Icon(Icons.camera_enhance_rounded, size: 16),
+                              label: const Text('Enroll Now'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF007A87),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              onPressed: () => Navigator.pop(ctx, true),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (shouldEnroll == true && mounted) {
+                        await MultiAngleFaceEnrollmentDialog.show(
+                          context,
+                          staffDocId: currentInv.id,
+                          staffName: currentInv.name,
+                          resourceId: currentInv.resourceId,
+                        );
+                      }
+                      return; // Block duty reached flow
+                    }
+
                     // 1. Mandatory Location Check before proceeding
                     final loc = await LocationService.getCurrentLocation();
                     if (!loc.success || loc.latitude == null || loc.longitude == null) {
@@ -1284,12 +1893,24 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                     if (!mounted) return;
                     // 3. Mandatory Biometric Face Verification (Anti-Proxy Attendance)
                     final auth = ref.read(authProvider);
+                    final allInvs = ref.read(invigilatorProvider);
+                    Invigilator? matchedInv;
+                    try {
+                      matchedInv = allInvs.firstWhere(
+                        (i) =>
+                            i.id == duty.invigilatorId ||
+                            i.id == auth.userId ||
+                            (i.resourceId.isNotEmpty && i.resourceId == auth.userId),
+                      );
+                    } catch (_) {}
+
                     final faceResult = await FaceVerificationDialog.show(
                       context,
                       staffName: auth.userName ?? 'Invigilator',
                       resourceId: auth.userId,
                       examName: duty.examName,
                       centerName: duty.centerName,
+                      faceFrontUrl: matchedInv?.faceFrontUrl,
                     );
 
                     if (faceResult == null || !faceResult.isVerified) {
@@ -1342,10 +1963,27 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                         SnackBar(content: Text('${s.error}: ${result.error}'), backgroundColor: Colors.red),
                       );
                     }
+                  }
+                : () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('⚠️ Please accept the duty above first to enable the Reached button.'),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
                   },
                 ),
-              )
-            else
+              ),
+              if (duty.status != 'accepted') ...[
+                const SizedBox(height: 4),
+                Center(
+                  child: Text(
+                    '⚠️ Reached button is enabled after accepting the duty',
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
+                  ),
+                ),
+              ],
+            ] else
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -1519,51 +2157,34 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    icon: const Icon(Icons.logout_rounded, size: 18),
-                    label: const Text('Clock Out from Duty', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                    icon: Icon(duty.isExamCompleted ? Icons.logout_rounded : Icons.lock_outline_rounded, size: 18),
+                    label: const Text('Exit / Clock Out from Duty', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF7C3AED),
+                      backgroundColor: duty.isExamCompleted ? const Color(0xFF7C3AED) : Colors.grey.shade600,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    onPressed: () => _handleDutyClockOut(duty),
+                    onPressed: duty.isExamCompleted
+                        ? () => _handleDutyClockOut(duty)
+                        : () => _showCannotExitDialog(duty),
                   ),
                 ),
-              ],
-            ],
-
-            if (duty.status == 'pending') ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => ref.read(dutyProvider.notifier).updateDutyStatus(duty.id, 'rejected'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                        side: const BorderSide(color: Colors.red),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                if (!duty.isExamCompleted) ...[
+                  const SizedBox(height: 5),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.lock_clock, size: 13, color: Colors.amber.shade700),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Exit disabled until exam completion (${duty.dutyEndTime})',
+                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
                       ),
-                      child: Text(s.reject),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => ref.read(dutyProvider.notifier).updateDutyStatus(duty.id, 'accepted'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      child: Text(s.accept),
-                    ),
+                    ],
                   ),
                 ],
-              ),
+              ],
             ],
 
             // Duty Swap Button: only shown if Admin has enabled Swap Permission
@@ -1597,8 +2218,8 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
               ),
             ),
 
-            // Digital Gate Pass & QR Badge
-            if (duty.status == 'accepted') ...[
+            // Digital Gate Pass & QR Badge (available once duty is assigned and active)
+            if (duty.status != 'rejected') ...[
               const SizedBox(height: 10),
               SizedBox(
                 width: double.infinity,
@@ -2355,7 +2976,204 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+
+          // ── Biometric Face Verification Card (Supabase + Firebase) ──
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: inv.isFaceEnrolled
+                    ? const Color(0xFF10B981).withValues(alpha: 0.4)
+                    : Colors.amber.withValues(alpha: 0.4),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: (inv.isFaceEnrolled ? const Color(0xFF10B981) : Colors.amber).withValues(alpha: 0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          inv.isFaceEnrolled ? Icons.verified_user_rounded : Icons.face_retouching_natural_rounded,
+                          color: inv.isFaceEnrolled ? const Color(0xFF10B981) : Colors.amber.shade800,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Biometric Face ID',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: inv.isFaceEnrolled
+                            ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                            : Colors.amber.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        inv.isFaceEnrolled ? 'ENROLLED & ACTIVE' : 'NOT ENROLLED',
+                        style: TextStyle(
+                          color: inv.isFaceEnrolled ? const Color(0xFF047857) : Colors.amber.shade900,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  inv.isFaceEnrolled
+                      ? 'Your 3-angle biometric face photos are securely stored in Supabase Storage and verified for proxy-free exam attendance.'
+                      : 'Capture 3 face angles (Front, Left, Right) to enable biometric duty check-in and digital gate pass authorization.',
+                  style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600, height: 1.35),
+                ),
+                if (inv.isFaceEnrolled && inv.faceFrontUrl != null) ...[
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      // Front Thumbnail
+                      if (inv.faceFrontUrl != null)
+                        Expanded(
+                          child: Column(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.network(
+                                  inv.faceFrontUrl!,
+                                  height: 70,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    height: 70,
+                                    color: Colors.grey.shade200,
+                                    child: const Icon(Icons.person, color: Colors.grey),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text('Front', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(width: 8),
+                      // Left Thumbnail
+                      if (inv.faceLeftUrl != null)
+                        Expanded(
+                          child: Column(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.network(
+                                  inv.faceLeftUrl!,
+                                  height: 70,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    height: 70,
+                                    color: Colors.grey.shade200,
+                                    child: const Icon(Icons.turn_left, color: Colors.grey),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text('Left 30°', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(width: 8),
+                      // Right Thumbnail
+                      if (inv.faceRightUrl != null)
+                        Expanded(
+                          child: Column(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.network(
+                                  inv.faceRightUrl!,
+                                  height: 70,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    height: 70,
+                                    color: Colors.grey.shade200,
+                                    child: const Icon(Icons.turn_right, color: Colors.grey),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text('Right 30°', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: Icon(
+                      inv.isFaceEnrolled ? Icons.camera_enhance_rounded : Icons.face_rounded,
+                      size: 18,
+                    ),
+                    label: Text(
+                      inv.isFaceEnrolled ? 'Re-enroll / Update 3 Angles' : 'Capture & Enroll 3 Face Angles',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: inv.isFaceEnrolled ? const Color(0xFF007A87) : const Color(0xFF047857),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () async {
+                      final updated = await MultiAngleFaceEnrollmentDialog.show(
+                        context,
+                        staffDocId: inv.id,
+                        staffName: inv.name,
+                        resourceId: inv.resourceId,
+                        existingFrontUrl: inv.faceFrontUrl,
+                        existingLeftUrl: inv.faceLeftUrl,
+                        existingRightUrl: inv.faceRightUrl,
+                      );
+                      if (updated == true && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Row(
+                              children: [
+                                Icon(Icons.check_circle, color: Colors.white),
+                                SizedBox(width: 8),
+                                Text('Face ID angles successfully saved to Supabase & Firebase!'),
+                              ],
+                            ),
+                            backgroundColor: Color(0xFF10B981),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
 
           // Language Setting Tile
           Card(

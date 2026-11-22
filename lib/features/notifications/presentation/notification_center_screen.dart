@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:duty_desk/l10n/app_localizations.dart';
+import 'package:go_router/go_router.dart';
 import '../providers/notification_provider.dart';
 
 class NotificationCenterScreen extends ConsumerStatefulWidget {
@@ -89,6 +90,17 @@ class _NotificationCenterScreenState extends ConsumerState<NotificationCenterScr
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/admin_dashboard');
+            }
+          },
+        ),
         title: Text(s.notificationCenter, style: const TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           if (unreadCount > 0)

@@ -16,7 +16,6 @@ import '../../incidents/providers/incident_provider.dart';
 import 'gate_pass_scanner_dialog.dart';
 import 'whatsapp_dispatcher_dialog.dart';
 import 'standby_engine_dialog.dart';
-import '../../../core/services/standby_promotion_service.dart';
 
 class AdminDashboardScreen extends ConsumerStatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -32,12 +31,6 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final engine = ref.read(standbyEngineProvider);
-      if (!engine.isMonitoring) {
-        ref.read(standbyEngineProvider.notifier).startMonitoring();
-      }
-    });
   }
 
   void _showExportModal(List<ExamDuty> duties, List<Invigilator> invs) {
@@ -425,6 +418,22 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           ),
         ),
         PopupMenuItem<String>(
+          value: 'demo_role',
+          child: ListTile(
+            leading: const Icon(Icons.security_rounded, color: Color(0xFF6366F1)),
+            title: const Text('Switch Demo Role'),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'reset_password',
+          child: const ListTile(
+            leading: Icon(Icons.lock_reset_rounded, color: Color(0xFF007A87)),
+            title: Text('Forgot / Reset Password'),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+        PopupMenuItem<String>(
           value: 'logout',
           child: ListTile(
             leading: const Icon(Icons.logout, color: Colors.red),
@@ -438,6 +447,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         DutySettingsDialog.show(context);
       } else if (value == 'language' && context.mounted) {
         context.push('/settings/language');
+      } else if (value == 'demo_role' && context.mounted) {
+        _showDemoRoleSwitcher(context, ref);
+      } else if (value == 'reset_password' && context.mounted) {
+        context.push('/forgot_password');
       } else if (value == 'logout' && context.mounted) {
         _showLogoutDialog(context, ref);
       }
@@ -502,6 +515,24 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     final activeCount = filteredDuties.where((d) => d.status.toLowerCase() == 'accepted').length;
     final pendingCount = filteredDuties.where((d) => d.status.toLowerCase() == 'pending').length;
 
+    // Filter out dummy/mock entries and sort by recency (date descending, then createdAt descending)
+    final validAdminDuties = duties.where((d) {
+      if (d.invigilatorId.isEmpty) return false;
+      final nameLower = d.examName.toLowerCase();
+      if (nameLower.contains('dummy') || nameLower.contains('mock batch') || nameLower.contains('pnb lbo')) {
+        return false;
+      }
+      return true;
+    }).toList()
+      ..sort((a, b) {
+        final dateCmp = b.date.compareTo(a.date);
+        if (dateCmp != 0) return dateCmp;
+        if (b.createdAt != null && a.createdAt != null) {
+          return b.createdAt!.compareTo(a.createdAt!);
+        }
+        return b.shift.compareTo(a.shift);
+      });
+
     // Today's Exam Duties & Arrival Statistics
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final todayDuties = duties.where((d) => d.date == todayStr && d.status.toLowerCase() != 'rejected').toList();
@@ -529,15 +560,20 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     final textColor = isDarkMode ? Colors.white : const Color(0xFF0F172A);
     final subtitleColor = isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
 
+
     return Scaffold(
       backgroundColor: screenBgColor,
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1240),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
               // HEADER ROW (Greeting + Avatar)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1359,52 +1395,72 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                 ),
               ),
 
-              // 2x2 Stats Cards
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 16,
-                crossAxisSpacing: 16,
-                childAspectRatio: 1.15,
-                children: [
-                  _StatCard(
-                    title: s.invigilators,
-                    count: invs.length.toString(),
-                    icon: Icons.people_alt_rounded,
-                    bgColor: const Color(0xFFEFF6FF),
-                    borderColor: const Color(0xFFBFDBFE),
-                    tintColor: const Color(0xFF1D4ED8),
-                    onTap: () => context.go('/admin_dashboard/manage_invigilators'),
-                  ),
-                  _StatCard(
-                    title: s.accepted,
-                    count: activeCount.toString(),
-                    icon: Icons.checklist_rtl_rounded,
-                    bgColor: const Color(0xFFECFDF5),
-                    borderColor: const Color(0xFFA7F3D0),
-                    tintColor: const Color(0xFF047857),
-                    onTap: () => context.go('/admin_dashboard/reports?filter=accepted'),
-                  ),
-                  _StatCard(
-                    title: s.pending,
-                    count: pendingCount.toString(),
-                    icon: Icons.hourglass_empty_rounded,
-                    bgColor: const Color(0xFFFFFBEB),
-                    borderColor: const Color(0xFFFDE68A),
-                    tintColor: const Color(0xFFB45309),
-                    onTap: () => context.go('/admin_dashboard/reports?filter=pending'),
-                  ),
-                  _StatCard(
-                    title: s.centers,
-                    count: centers.length.toString(),
-                    icon: Icons.business_rounded,
-                    bgColor: const Color(0xFFF5F3FF),
-                    borderColor: const Color(0xFFDDD6FE),
-                    tintColor: const Color(0xFF6D28D9),
-                    onTap: () => context.go('/admin_dashboard/manage_centers'),
-                  ),
-                ],
+              // Compact Sleek Stats Cards
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  final int crossAxisCount;
+                  const double targetHeight = 64.0;
+
+                  if (width >= 860) {
+                    crossAxisCount = 4;
+                  } else if (width >= 560) {
+                    crossAxisCount = 4;
+                  } else {
+                    crossAxisCount = 2;
+                  }
+
+                  const double spacing = 12.0;
+                  final itemWidth = (width - ((crossAxisCount - 1) * spacing)) / crossAxisCount;
+                  final childAspectRatio = itemWidth / targetHeight;
+
+                  return GridView.count(
+                    crossAxisCount: crossAxisCount,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: spacing,
+                    crossAxisSpacing: spacing,
+                    childAspectRatio: childAspectRatio,
+                    children: [
+                      _StatCard(
+                        title: s.invigilators,
+                        count: invs.length.toString(),
+                        icon: Icons.people_alt_rounded,
+                        bgColor: const Color(0xFFEFF6FF),
+                        borderColor: const Color(0xFFBFDBFE),
+                        tintColor: const Color(0xFF1D4ED8),
+                        onTap: () => context.go('/admin_dashboard/manage_invigilators'),
+                      ),
+                      _StatCard(
+                        title: s.accepted,
+                        count: activeCount.toString(),
+                        icon: Icons.checklist_rtl_rounded,
+                        bgColor: const Color(0xFFECFDF5),
+                        borderColor: const Color(0xFFA7F3D0),
+                        tintColor: const Color(0xFF047857),
+                        onTap: () => context.go('/admin_dashboard/reports?filter=accepted'),
+                      ),
+                      _StatCard(
+                        title: s.pending,
+                        count: pendingCount.toString(),
+                        icon: Icons.hourglass_empty_rounded,
+                        bgColor: const Color(0xFFFFFBEB),
+                        borderColor: const Color(0xFFFDE68A),
+                        tintColor: const Color(0xFFB45309),
+                        onTap: () => context.go('/admin_dashboard/reports?filter=pending'),
+                      ),
+                      _StatCard(
+                        title: s.centers,
+                        count: centers.length.toString(),
+                        icon: Icons.business_rounded,
+                        bgColor: const Color(0xFFF5F3FF),
+                        borderColor: const Color(0xFFDDD6FE),
+                        tintColor: const Color(0xFF6D28D9),
+                        onTap: () => context.go('/admin_dashboard/manage_centers'),
+                      ),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 28),
 
@@ -1418,15 +1474,33 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                   letterSpacing: -0.3,
                 ),
               ),
-              const SizedBox(height: 16),
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 16,
-                crossAxisSpacing: 16,
-                childAspectRatio: 1.5,
-                children: [
+              const SizedBox(height: 14),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  final int crossAxisCount;
+                  const double targetHeight = 62.0;
+
+                  if (width >= 1050) {
+                    crossAxisCount = 4;
+                  } else if (width >= 700) {
+                    crossAxisCount = 3;
+                  } else {
+                    crossAxisCount = 2;
+                  }
+
+                  const double spacing = 12.0;
+                  final itemWidth = (width - ((crossAxisCount - 1) * spacing)) / crossAxisCount;
+                  final childAspectRatio = itemWidth / targetHeight;
+
+                  return GridView.count(
+                    crossAxisCount: crossAxisCount,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: spacing,
+                    crossAxisSpacing: spacing,
+                    childAspectRatio: childAspectRatio,
+                    children: [
                   _ActionCard(
                     title: s.liveExamControlRoom,
                     subtitle: s.liveMonitoring,
@@ -1582,7 +1656,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                     iconColor: const Color(0xFF007A87),
                     onTap: () => context.go('/admin_dashboard/student_portal'),
                   ),
-                ],
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 28),
 
@@ -1613,23 +1689,65 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-              if (duties.isEmpty)
+              if (validAdminDuties.isEmpty)
                 Container(
-                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
                   decoration: BoxDecoration(
                     color: isDarkMode ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: isDarkMode ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
                   ),
-                  child: Center(
-                    child: Text(
-                      s.noDutiesAssigned,
-                      style: TextStyle(color: subtitleColor, fontSize: 13),
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF007A87).withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.assignment_turned_in_outlined,
+                          size: 30,
+                          color: Color(0xFF007A87),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        s.noDutiesAssigned,
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'No duty allocations yet. Click below to assign staff to upcoming exam sessions.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: subtitleColor, fontSize: 12.5),
+                      ),
+                      const SizedBox(height: 14),
+                      ElevatedButton.icon(
+                        onPressed: isAuditor
+                            ? () => _showAuditorReadOnlyNotice(context, s.assignDuty)
+                            : () => context.go('/admin_dashboard/allocate_duty'),
+                        icon: const Icon(Icons.add, size: 16),
+                        label: Text(s.assignDuty),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF007A87),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          textStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
                   ),
                 )
               else ...[
-                for (final duty in duties.take(4)) ...[
+                for (final duty in validAdminDuties.take(6)) ...[
                   Builder(builder: (context) {
                     final matchedInv = invs.firstWhere(
                       (i) => i.id == duty.invigilatorId,
@@ -1659,6 +1777,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                         badgeText: badgeText,
                         badgeColor: badgeColor,
                         badgeBgColor: badgeBg,
+                        onTap: () => context.go('/admin_dashboard/reports'),
                       ),
                     );
                   }),
@@ -1669,61 +1788,69 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           ),
         ),
       ),
+    ),
+  ),
       bottomNavigationBar: Container(
         height: 72,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDarkMode ? const Color(0xFF1E293B) : Colors.white,
           border: Border(
             top: BorderSide(
-              color: Colors.grey.withValues(alpha: 0.1),
+              color: isDarkMode ? const Color(0xFF334155) : Colors.grey.withValues(alpha: 0.1),
               width: 1,
             ),
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
+              color: Colors.black.withValues(alpha: isDarkMode ? 0.3 : 0.1),
               blurRadius: 10,
               offset: const Offset(0, -4),
             ),
           ],
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildNavItem(context, s.home, Icons.home_rounded, true, () {}),
-            _buildNavItem(context, s.invigilators, Icons.people_outline_rounded, false, () {
-              context.go('/admin_dashboard/manage_invigilators');
-            }),
-            _buildNavItem(context, s.dutyAllocation, Icons.assignment_outlined, false, () {
-              context.go('/admin_dashboard/allocate_duty');
-            }),
-            Stack(
-              alignment: Alignment.center,
+        child: Align(
+          alignment: Alignment.center,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildNavItem(context, s.reports, Icons.analytics_outlined, false, () {
-                  context.go('/admin_dashboard/reports');
+                _buildNavItem(context, s.home, Icons.home_rounded, true, () {}),
+                _buildNavItem(context, s.invigilators, Icons.people_outline_rounded, false, () {
+                  context.go('/admin_dashboard/manage_invigilators');
                 }),
-                if (pendingSwaps.isNotEmpty)
-                  Positioned(
-                    top: 10,
-                    right: 14,
-                    child: Container(
-                      width: 14,
-                      height: 14,
-                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '${pendingSwaps.length}',
-                        style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                _buildNavItem(context, s.dutyAllocation, Icons.assignment_outlined, false, () {
+                  context.go('/admin_dashboard/allocate_duty');
+                }),
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    _buildNavItem(context, s.reports, Icons.analytics_outlined, false, () {
+                      context.go('/admin_dashboard/reports');
+                    }),
+                    if (pendingSwaps.isNotEmpty)
+                      Positioned(
+                        top: 10,
+                        right: 14,
+                        child: Container(
+                          width: 14,
+                          height: 14,
+                          decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                          alignment: Alignment.center,
+                          child: Text(
+                            '${pendingSwaps.length}',
+                            style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+                  ],
+                ),
+                _buildNavItem(context, s.maintainData, Icons.admin_panel_settings_outlined, false, () {
+                  context.go('/admin_dashboard/maintain_data');
+                }),
               ],
             ),
-            _buildNavItem(context, s.maintainData, Icons.admin_panel_settings_outlined, false, () {
-              context.go('/admin_dashboard/maintain_data');
-            }),
-          ],
+          ),
         ),
       ),
     );
@@ -1843,6 +1970,82 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     );
   }
 
+  void _showDemoRoleSwitcher(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.security_rounded, size: 20, color: Color(0xFF6366F1)),
+                  SizedBox(width: 8),
+                  Text(
+                    'Switch Demo Role (RBAC)',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Quick-switch to preview each role\'s dashboard experience.',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _buildDemoRoleChip(ctx, ref, 'Admin', Icons.admin_panel_settings, const Color(0xFF007A87), UserRole.admin),
+                  _buildDemoRoleChip(ctx, ref, 'Finance Officer', Icons.payments_outlined, const Color(0xFF059669), UserRole.finance),
+                  _buildDemoRoleChip(ctx, ref, 'Auditor / Observer', Icons.visibility_outlined, const Color(0xFFD97706), UserRole.auditor),
+                  _buildDemoRoleChip(ctx, ref, 'Invigilator', Icons.badge_outlined, const Color(0xFF6366F1), UserRole.invigilator),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDemoRoleChip(BuildContext ctx, WidgetRef ref, String label, IconData icon, Color color, UserRole role) {
+    return InkWell(
+      onTap: () {
+        Navigator.pop(ctx);
+        ref.read(authProvider.notifier).loginAsDemoRole(role);
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showLogoutDialog(BuildContext context, WidgetRef ref) {
     final s = S.of(context)!;
     showDialog(
@@ -1958,63 +2161,84 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
         decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: borderColor, width: 1.2),
+          color: isDark ? const Color(0xFF1E293B) : bgColor,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isDark ? tintColor.withValues(alpha: 0.35) : borderColor,
+            width: 1.2,
+          ),
           boxShadow: [
             BoxShadow(
-              color: tintColor.withValues(alpha: 0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Row(
           children: [
             Container(
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                color: tintColor,
-                borderRadius: BorderRadius.circular(8),
+                color: isDark
+                    ? tintColor.withValues(alpha: 0.18)
+                    : tintColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: isDark
+                    ? Border.all(color: tintColor.withValues(alpha: 0.3), width: 0.8)
+                    : null,
               ),
               alignment: Alignment.center,
               child: Icon(
                 icon,
-                color: Colors.white,
+                color: tintColor,
                 size: 20,
               ),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  count,
-                  style: TextStyle(
-                    color: tintColor,
-                    fontSize: 32,
-                    fontWeight: FontWeight.w800,
-                    height: 1.0,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      count,
+                      style: TextStyle(
+                        color: isDark ? Colors.white : tintColor,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        height: 1.1,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: tintColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+                  const SizedBox(height: 2),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : tintColor.withValues(alpha: 0.85),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.2,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),
@@ -2040,15 +2264,21 @@ class _ActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF22252A),
-        borderRadius: BorderRadius.circular(16),
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -2056,23 +2286,25 @@ class _ActionCard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 12.0),
+            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
             child: Row(
               children: [
                 Container(
-                  width: 42,
-                  height: 42,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
+                    color: isDark
+                        ? iconColor.withValues(alpha: 0.18)
+                        : iconColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   alignment: Alignment.center,
                   child: Icon(
                     icon,
                     color: iconColor,
-                    size: 20,
+                    size: 18,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -2083,9 +2315,9 @@ class _ActionCard extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
+                        style: TextStyle(
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          fontSize: 12.5,
                           fontWeight: FontWeight.bold,
                           letterSpacing: -0.1,
                         ),
@@ -2095,8 +2327,8 @@ class _ActionCard extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         subtitle,
-                        style: const TextStyle(
-                          color: Color(0xFF94A3B8),
+                        style: TextStyle(
+                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                           fontSize: 10,
                           fontWeight: FontWeight.w400,
                         ),
@@ -2123,6 +2355,7 @@ class _ActivityItem extends StatelessWidget {
   final String badgeText;
   final Color badgeColor;
   final Color badgeBgColor;
+  final VoidCallback? onTap;
 
   const _ActivityItem({
     required this.title,
@@ -2132,25 +2365,29 @@ class _ActivityItem extends StatelessWidget {
     required this.badgeText,
     required this.badgeColor,
     required this.badgeBgColor,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14.0),
-      decoration: BoxDecoration(
-        color: const Color(0xFF22252A),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14.0),
+        decoration: BoxDecoration(
+          color: const Color(0xFF22252A),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
         children: [
           Container(
             width: 42,
@@ -2209,6 +2446,7 @@ class _ActivityItem extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }

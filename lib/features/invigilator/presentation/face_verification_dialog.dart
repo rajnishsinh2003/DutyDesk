@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
+import 'package:http/http.dart' as http;
+import '../../../core/services/face_validation_service.dart';
 
 class FaceVerificationResult {
   final bool isVerified;
@@ -24,6 +27,7 @@ class FaceVerificationDialog extends StatefulWidget {
   final String? resourceId;
   final String examName;
   final String centerName;
+  final String? faceFrontUrl;
 
   const FaceVerificationDialog({
     super.key,
@@ -31,6 +35,7 @@ class FaceVerificationDialog extends StatefulWidget {
     this.resourceId,
     required this.examName,
     required this.centerName,
+    this.faceFrontUrl,
   });
 
   static Future<FaceVerificationResult?> show(
@@ -39,6 +44,7 @@ class FaceVerificationDialog extends StatefulWidget {
     String? resourceId,
     required String examName,
     required String centerName,
+    String? faceFrontUrl,
   }) {
     return showDialog<FaceVerificationResult>(
       context: context,
@@ -48,6 +54,7 @@ class FaceVerificationDialog extends StatefulWidget {
         resourceId: resourceId,
         examName: examName,
         centerName: centerName,
+        faceFrontUrl: faceFrontUrl,
       ),
     );
   }
@@ -61,10 +68,18 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
   late AnimationController _scannerAnimCtrl;
   late Animation<double> _scanPosAnim;
 
-  int _step = 0; // 0 = ready, 1 = scanning & liveness, 2 = matching, 3 = verified
+  int _step = 0; // 0 = ready, 1 = scanning & liveness, 2 = matching, 3 = verified, 4 = mismatch/rejected
   double _matchScore = 0.0;
   String _statusText = 'Center your face within the biometric oval';
+  String? _failureReason;
   Timer? _stepTimer;
+  Timer? _countdownTimer;
+  int _countdown = 0;
+
+  Uint8List? _referenceBytes;
+  bool _isFetchingReference = false;
+  String? _referenceFetchError;
+  Uint8List? _liveCaptureBytes;
 
   CameraController? _cameraController;
   List<CameraDescription>? _availableCameras;
@@ -84,6 +99,47 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
     );
 
     _initCamera();
+    _fetchReferencePhoto();
+  }
+
+  Future<void> _fetchReferencePhoto() async {
+    if (widget.faceFrontUrl == null || widget.faceFrontUrl!.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _referenceFetchError = 'No enrolled face photo found in database';
+        });
+      }
+      return;
+    }
+
+    setState(() => _isFetchingReference = true);
+    try {
+      final response = await http.get(Uri.parse(widget.faceFrontUrl!)).timeout(
+        const Duration(seconds: 10),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        if (mounted) {
+          setState(() {
+            _referenceBytes = response.bodyBytes;
+            _isFetchingReference = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _referenceFetchError = 'Could not load registered face photo (${response.statusCode})';
+            _isFetchingReference = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _referenceFetchError = 'Failed to load reference: $e';
+          _isFetchingReference = false;
+        });
+      }
+    }
   }
 
   Future<void> _initCamera() async {
@@ -152,52 +208,146 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
   @override
   void dispose() {
     _stepTimer?.cancel();
+    _countdownTimer?.cancel();
     _scannerAnimCtrl.dispose();
     _cameraController?.dispose();
     super.dispose();
   }
 
   void _startVerification() async {
+    if (_referenceBytes == null && widget.faceFrontUrl != null) {
+      await _fetchReferencePhoto();
+    }
+
+    if (_referenceBytes == null) {
+      setState(() {
+        _step = 4;
+        _statusText = '❌ Reference Face Missing';
+        _failureReason = 'No registered biometric face portrait found in database for ${widget.staffName}. Please complete 3-angle face enrollment first.';
+      });
+      HapticFeedback.heavyImpact();
+      return;
+    }
+
+    // Start 3-second countdown giving user ample time to hold phone at eye level
     setState(() {
+      _liveCaptureBytes = null;
       _step = 1;
-      _statusText = 'Capturing frame & verifying passive liveness...';
+      _countdown = 3;
+      _statusText = 'Hold phone at eye level... 3';
+      _failureReason = null;
     });
     HapticFeedback.mediumImpact();
 
-    // If live camera is available, capture attendance selfie frame
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      if (_countdown > 1) {
+        setState(() {
+          _countdown--;
+          _statusText = _countdown == 2
+              ? 'Keep your face centered inside oval... 2'
+              : 'Hold still, capturing... 1';
+        });
+        HapticFeedback.selectionClick();
+      } else {
+        timer.cancel();
+        setState(() {
+          _countdown = 0;
+          _statusText = '📸 Capturing live face & verifying passive liveness...';
+        });
+        HapticFeedback.mediumImpact();
+        await _performCaptureAndVerify();
+      }
+    });
+  }
+
+  Future<void> _performCaptureAndVerify() async {
+    Uint8List? liveBytes;
     if (_cameraController != null && _cameraController!.value.isInitialized) {
       try {
-        await _cameraController!.takePicture();
-      } catch (_) {
-        // Continue verification smoothly
+        final xFile = await _cameraController!.takePicture();
+        liveBytes = await xFile.readAsBytes();
+        if (mounted) {
+          setState(() {
+            _liveCaptureBytes = liveBytes;
+          });
+        }
+      } catch (e) {
+        debugPrint('Camera capture error: $e');
       }
     }
 
-    // Step 1: Liveness check (0.8s)
-    _stepTimer = Timer(const Duration(milliseconds: 900), () {
-      if (!mounted) return;
+    if (liveBytes == null) {
+      if (mounted) {
+        setState(() {
+          _step = 4;
+          _statusText = '❌ Camera Frame Capture Failed';
+          _failureReason = 'Unable to capture live camera frame. Please check camera permissions and retry.';
+        });
+        HapticFeedback.heavyImpact();
+      }
+      return;
+    }
+
+    // Step 2: Compare live face with reference photo from Supabase
+    if (mounted) {
       setState(() {
         _step = 2;
-        _statusText = 'Extracting facial landmarks & matching staff profile...';
+        _statusText = 'Extracting facial landmarks & matching with registered portrait...';
       });
       HapticFeedback.lightImpact();
+    }
 
-      // Step 2: Biometric match calculation (0.8s)
-      _stepTimer = Timer(const Duration(milliseconds: 900), () {
-        if (!mounted) return;
-        // Deterministic realistic high match (97.2% to 99.4%)
-        final rand = math.Random();
-        final score = 97.0 + rand.nextDouble() * 2.5;
+    try {
+      var compResult = await FaceValidationService.compareFaces(
+        liveFrameBytes: liveBytes,
+        referencePhotoBytes: _referenceBytes!,
+        matchThreshold: 65.0,
+      );
 
+      // If borderline score (between 50% and 65%), take a quick 2nd stabilization frame
+      // to handle camera autofocus/jitter without failing immediately
+      if (!compResult.isMatch &&
+          compResult.similarityScore >= 50.0 &&
+          _cameraController != null &&
+          _cameraController!.value.isInitialized) {
+        try {
+          await Future.delayed(const Duration(milliseconds: 300));
+          final secondFile = await _cameraController!.takePicture();
+          final secondBytes = await secondFile.readAsBytes();
+          final secondResult = await FaceValidationService.compareFaces(
+            liveFrameBytes: secondBytes,
+            referencePhotoBytes: _referenceBytes!,
+            matchThreshold: 65.0,
+          );
+          if (secondResult.similarityScore > compResult.similarityScore) {
+            compResult = secondResult;
+            if (mounted) {
+              setState(() {
+                _liveCaptureBytes = secondBytes;
+              });
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (!mounted) return;
+
+      if (compResult.isMatch) {
+        // Biometric Match Confirmed! (Same Person)
         setState(() {
           _step = 3;
-          _matchScore = double.parse(score.toStringAsFixed(1));
-          _statusText = 'Biometric Verified! Match Confidence: ${_matchScore.toStringAsFixed(1)}%';
+          _matchScore = compResult.similarityScore;
+          _statusText = 'Database Matched! Match Confidence: ${_matchScore.toStringAsFixed(1)}%';
         });
         HapticFeedback.heavyImpact();
 
-        // Step 3: Auto-close after brief confirmation
-        _stepTimer = Timer(const Duration(milliseconds: 1200), () {
+        _stepTimer = Timer(const Duration(milliseconds: 1400), () {
           if (!mounted) return;
           Navigator.of(context).pop(
             FaceVerificationResult(
@@ -207,15 +357,35 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
             ),
           );
         });
+      } else {
+        // Biometric Mismatch Detected! (Different Person / Proxy Attempt / Ceiling)
+        setState(() {
+          _step = 4;
+          _matchScore = compResult.similarityScore;
+          _statusText = '❌ BIOMETRIC MISMATCH DETECTED (${_matchScore.toStringAsFixed(1)}%)';
+          _failureReason = compResult.failureReason ??
+              'The face in front of the camera does NOT match the registered portrait of ${widget.staffName} (Match: ${_matchScore.toStringAsFixed(1)}% < Threshold: 65%). Proxy attendance is blocked.';
+        });
+        HapticFeedback.heavyImpact();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _step = 4;
+        _statusText = '❌ Verification Error';
+        _failureReason = 'An error occurred during facial feature comparison: $e';
       });
-    });
+      HapticFeedback.heavyImpact();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     const brandColor = Color(0xFF007A87);
     const verifiedColor = Color(0xFF10B981);
+    const rejectedColor = Color(0xFFEF4444);
     final isDone = _step == 3;
+    final isMismatch = _step == 4;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -225,14 +395,18 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
           color: const Color(0xFF0F172A),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: isDone ? verifiedColor : brandColor.withValues(alpha: 0.4),
+            color: isDone
+                ? verifiedColor
+                : (isMismatch ? rejectedColor : brandColor.withValues(alpha: 0.4)),
             width: 1.5,
           ),
           boxShadow: [
             BoxShadow(
               color: isDone
                   ? verifiedColor.withValues(alpha: 0.25)
-                  : brandColor.withValues(alpha: 0.2),
+                  : (isMismatch
+                      ? rejectedColor.withValues(alpha: 0.3)
+                      : brandColor.withValues(alpha: 0.2)),
               blurRadius: 30,
               spreadRadius: 2,
             ),
@@ -251,12 +425,20 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                   decoration: BoxDecoration(
                     color: isDone
                         ? verifiedColor.withValues(alpha: 0.15)
-                        : brandColor.withValues(alpha: 0.15),
+                        : (isMismatch
+                            ? rejectedColor.withValues(alpha: 0.15)
+                            : brandColor.withValues(alpha: 0.15)),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    isDone ? Icons.verified_user : Icons.face_retouching_natural,
-                    color: isDone ? verifiedColor : const Color(0xFF22D3EE),
+                    isDone
+                        ? Icons.verified_user
+                        : (isMismatch
+                            ? Icons.gpp_bad_rounded
+                            : Icons.face_retouching_natural),
+                    color: isDone
+                        ? verifiedColor
+                        : (isMismatch ? rejectedColor : const Color(0xFF22D3EE)),
                     size: 22,
                   ),
                 ),
@@ -283,7 +465,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                     ],
                   ),
                 ),
-                if (_step == 0)
+                if (_step == 0 || isMismatch)
                   IconButton(
                     icon: const Icon(Icons.close, color: Colors.white70, size: 20),
                     onPressed: () => Navigator.of(context).pop(null),
@@ -301,8 +483,15 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    // 1. Live Device Camera Preview (when initialized)
-                    if (_cameraController != null && _cameraController!.value.isInitialized)
+                    // 1. Live Device Camera Preview (when initialized) or Frozen Captured Snapshot Preview
+                    if (_liveCaptureBytes != null)
+                      SizedBox.expand(
+                        child: Image.memory(
+                          _liveCaptureBytes!,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    else if (_cameraController != null && _cameraController!.value.isInitialized)
                       SizedBox.expand(
                         child: FittedBox(
                           fit: BoxFit.cover,
@@ -342,8 +531,10 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                         border: Border.all(
                           color: isDone
                               ? verifiedColor
-                              : (_step > 0 ? const Color(0xFF22D3EE) : Colors.white54),
-                          width: isDone ? 3 : 2,
+                              : (isMismatch
+                                  ? rejectedColor
+                                  : (_step > 0 ? const Color(0xFF22D3EE) : Colors.white54)),
+                          width: isDone || isMismatch ? 3 : 2,
                         ),
                         boxShadow: [
                           if (isDone)
@@ -352,18 +543,52 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                               blurRadius: 20,
                               spreadRadius: 4,
                             ),
+                          if (isMismatch)
+                            BoxShadow(
+                              color: rejectedColor.withValues(alpha: 0.4),
+                              blurRadius: 20,
+                              spreadRadius: 4,
+                            ),
                         ],
                       ),
                       child: Center(
-                        child: Icon(
-                          Icons.person,
-                          size: 110,
-                          color: isDone
-                              ? verifiedColor.withValues(alpha: 0.35)
-                              : (_cameraController != null && _cameraController!.value.isInitialized
-                                  ? Colors.transparent
-                                  : Colors.white.withValues(alpha: 0.12)),
-                        ),
+                        child: _countdown > 0
+                            ? Container(
+                                width: 72,
+                                height: 72,
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.75),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: const Color(0xFF22D3EE), width: 3),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF22D3EE).withValues(alpha: 0.5),
+                                      blurRadius: 16,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  '$_countdown',
+                                  style: const TextStyle(
+                                    fontSize: 36,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF22D3EE),
+                                  ),
+                                ),
+                              )
+                            : Icon(
+                                Icons.person,
+                                size: 110,
+                                color: isDone
+                                    ? verifiedColor.withValues(alpha: 0.35)
+                                    : (isMismatch
+                                        ? rejectedColor.withValues(alpha: 0.35)
+                                        : (_cameraController != null && _cameraController!.value.isInitialized
+                                            ? Colors.transparent
+                                            : Colors.white.withValues(alpha: 0.12))),
+                              ),
                       ),
                     ),
 
@@ -477,6 +702,50 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                         ),
                       ),
 
+                    // Mismatch Warning Splash Overlay
+                    if (isMismatch)
+                      Container(
+                        color: Colors.black.withValues(alpha: 0.65),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: const BoxDecoration(
+                                  color: rejectedColor,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.close_rounded,
+                                  color: Colors.white,
+                                  size: 42,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                '${_matchScore.toStringAsFixed(1)}% MATCH',
+                                style: const TextStyle(
+                                  color: rejectedColor,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'MISMATCH: REQUIRED ≥ 65%',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
                     // Telemetry Overlay HUD at bottom of frame
                     Positioned(
                       bottom: 8,
@@ -498,8 +767,10 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                           ),
                           _telemetryChip(
                             icon: Icons.grid_view_rounded,
-                            label: _step >= 1 ? '68 LANDMARKS' : 'STANDBY',
-                            color: Colors.white70,
+                            label: _referenceBytes != null
+                                ? 'REF: SUPABASE OK'
+                                : (_isFetchingReference ? 'FETCHING REF...' : 'NO REF'),
+                            color: _referenceBytes != null ? const Color(0xFF10B981) : Colors.amber,
                           ),
                         ],
                       ),
@@ -510,7 +781,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
             ),
             const SizedBox(height: 14),
 
-            // Staff & Duty Info Pill
+            // Staff & Duty Info Pill with Reference Portrait preview
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
@@ -520,14 +791,25 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
               ),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: brandColor.withValues(alpha: 0.3),
-                    child: Text(
-                      widget.staffName.isNotEmpty ? widget.staffName[0].toUpperCase() : 'S',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                  if (_referenceBytes != null)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.memory(
+                        _referenceBytes!,
+                        width: 32,
+                        height: 32,
+                        fit: BoxFit.cover,
+                      ),
+                    )
+                  else
+                    CircleAvatar(
+                      radius: 16,
+                      backgroundColor: brandColor.withValues(alpha: 0.3),
+                      child: Text(
+                        widget.staffName.isNotEmpty ? widget.staffName[0].toUpperCase() : 'S',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
                     ),
-                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -547,7 +829,9 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                     ),
                   ),
                   if (isDone)
-                    const Icon(Icons.check_circle, color: verifiedColor, size: 20),
+                    const Icon(Icons.check_circle, color: verifiedColor, size: 20)
+                  else if (isMismatch)
+                    const Icon(Icons.cancel, color: rejectedColor, size: 20),
                 ],
               ),
             ),
@@ -561,9 +845,11 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                 key: ValueKey(_statusText),
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: isDone ? verifiedColor : Colors.grey.shade300,
+                  color: isDone
+                      ? verifiedColor
+                      : (isMismatch ? rejectedColor : Colors.grey.shade300),
                   fontSize: 12,
-                  fontWeight: isDone ? FontWeight.bold : FontWeight.w500,
+                  fontWeight: isDone || isMismatch ? FontWeight.bold : FontWeight.w500,
                 ),
               ),
             ),
@@ -607,13 +893,13 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                     ),
                     SizedBox(width: 10),
                     Text(
-                      'Analyzing Biometrics...',
-                      style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                      'Matching Biometrics Against Supabase...',
+                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
               )
-            else
+            else if (isDone)
               ElevatedButton.icon(
                 icon: const Icon(Icons.check_circle_outline, size: 18),
                 label: const Text(
@@ -635,6 +921,80 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                     ),
                   );
                 },
+              )
+            else if (isMismatch)
+              Column(
+                children: [
+                  if (_failureReason != null)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: rejectedColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: rejectedColor.withValues(alpha: 0.5)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.warning_amber_rounded, color: rejectedColor, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _failureReason!,
+                              style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 11.5, height: 1.4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white70,
+                            side: const BorderSide(color: Colors.white24),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: () {
+                            Navigator.of(context).pop(
+                              FaceVerificationResult(
+                                isVerified: false,
+                                matchScore: _matchScore,
+                                timestamp: DateTime.now().toIso8601String(),
+                              ),
+                            );
+                          },
+                          child: const Text('Cancel & Exit'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.refresh, size: 18),
+                          label: const Text('Try Again', style: TextStyle(fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: brandColor,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _step = 0;
+                              _countdown = 0;
+                              _liveCaptureBytes = null;
+                              _statusText = 'Center your face within the biometric oval';
+                              _failureReason = null;
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
           ],
         ),

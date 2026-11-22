@@ -118,6 +118,9 @@ class _BulkImportScreenState extends ConsumerState<BulkImportScreen> {
           fileBytes = await f.readAsBytes();
           fileSize = fileBytes.length;
         }
+      } else {
+        fileBytes = await pickedFile.readAsBytes();
+        fileSize = fileBytes.length;
       }
 
       if (fileBytes == null || fileBytes.isEmpty) {
@@ -277,6 +280,17 @@ class _BulkImportScreenState extends ConsumerState<BulkImportScreen> {
     return Scaffold(
       backgroundColor: screenBgColor,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/admin_dashboard');
+            }
+          },
+        ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

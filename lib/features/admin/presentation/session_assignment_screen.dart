@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:duty_desk/l10n/app_localizations.dart';
+import 'package:go_router/go_router.dart';
 import '../providers/exam_session_provider.dart';
 import '../providers/invigilator_provider.dart';
 import '../../invigilator/providers/duty_provider.dart';
@@ -28,6 +29,8 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
   String _reportingTime = '05:00 AM';
   String _excellentUntil = '06:20 AM';
   String _goodUntil = '06:30 AM';
+  String _dutyStartTime = '09:00 AM';
+  String _dutyEndTime = '01:00 PM';
   String? _timingValidationError;
 
   bool _isAllocating = false;
@@ -989,13 +992,18 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
     _reportingTime = '05:00 AM';
     _excellentUntil = '06:20 AM';
     _goodUntil = '06:30 AM';
+    _dutyStartTime = '09:00 AM';
+    _dutyEndTime = '01:00 PM';
     _timingValidationError = null;
+    _isAllocating = false;
 
     String staffSearchQuery = '';
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      isDismissible: !_isAllocating,
+      enableDrag: !_isAllocating,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) {
@@ -1021,20 +1029,24 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
           final currentRateAmount = dutySettings.getAmountForShift(_selectedShift);
           final totalRemuneration = _selectedInvigilatorIds.length * _selectedDates.length * currentRateAmount;
 
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom,
-              left: 16,
-              right: 16,
-              top: 20,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Title + Auto-recommend
-                  Row(
+          return PopScope(
+            canPop: !_isAllocating,
+            child: Stack(
+              children: [
+                Padding(
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.of(context).viewInsets.bottom,
+                    left: 16,
+                    right: 16,
+                    top: 20,
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Title + Auto-recommend
+                        Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
@@ -1307,6 +1319,58 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
                       ),
                     ],
                   ),
+                  const SizedBox(height: 12),
+
+                  // DUTY / EXAM SCHEDULE (Duty Start Time & Duty End Time)
+                  Text(
+                    'DUTY / EXAM SCHEDULE',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF007A87), letterSpacing: 0.5),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Configure exam start and end times (Invigilators cannot exit before end time)',
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTimingPickerField(
+                          label: 'Duty Start Time',
+                          value: _dutyStartTime,
+                          icon: Icons.play_circle_outline_rounded,
+                          color: const Color(0xFF0284C7),
+                          onTap: () async {
+                            final picked = await _pickTime(context, _dutyStartTime);
+                            if (picked != null) {
+                              setModalState(() {
+                                _dutyStartTime = picked;
+                                _validateTimingOrder();
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildTimingPickerField(
+                          label: 'Duty End Time',
+                          value: _dutyEndTime,
+                          icon: Icons.stop_circle_outlined,
+                          color: const Color(0xFF7C3AED),
+                          onTap: () async {
+                            final picked = await _pickTime(context, _dutyEndTime);
+                            if (picked != null) {
+                              setModalState(() {
+                                _dutyEndTime = picked;
+                                _validateTimingOrder();
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                   if (_timingValidationError != null) ...[
                     const SizedBox(height: 6),
                     Container(
@@ -1448,7 +1512,34 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
                                               '📍 $distanceKm km',
                                               style: TextStyle(fontSize: 10.5, color: Colors.blue.shade700, fontWeight: FontWeight.w500),
                                             ),
-                                            const SizedBox(width: 8),
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                              decoration: BoxDecoration(
+                                                color: inv.isFaceEnrolled ? Colors.green.withValues(alpha: 0.15) : Colors.amber.withValues(alpha: 0.15),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    inv.isFaceEnrolled ? Icons.verified : Icons.face_outlined,
+                                                    size: 9.5,
+                                                    color: inv.isFaceEnrolled ? Colors.green.shade800 : Colors.amber.shade900,
+                                                  ),
+                                                  const SizedBox(width: 2.5),
+                                                  Text(
+                                                    inv.isFaceEnrolled ? 'Face ID' : 'Pending',
+                                                    style: TextStyle(
+                                                      fontSize: 8.5,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: inv.isFaceEnrolled ? Colors.green.shade800 : Colors.amber.shade900,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
                                             Text(
                                               '⚖️ $totalDuties',
                                               style: const TextStyle(fontSize: 10.5, color: Color(0xFF007A87), fontWeight: FontWeight.w600),
@@ -1603,6 +1694,8 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
                               rateFormatted: currentRateFormatted,
                               totalAmount: totalRemuneration,
                               selectedStaff: selectedStaffList,
+                              dutyStartTime: _dutyStartTime,
+                              dutyEndTime: _dutyEndTime,
                             );
 
                             if (confirmed != true) return;
@@ -1623,6 +1716,8 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
                                     reportingTime: _reportingTime,
                                     excellentUntil: _excellentUntil,
                                     goodUntil: _goodUntil,
+                                    dutyStartTime: _dutyStartTime,
+                                    dutyEndTime: _dutyEndTime,
                                   );
 
                               setModalState(() => _isAllocating = false);
@@ -1652,7 +1747,18 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     child: _isAllocating
-                        ? const CircularProgressIndicator(color: Colors.white)
+                        ? const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
+                              ),
+                              SizedBox(width: 10),
+                              Text('Assigning Duty...', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+                            ],
+                          )
                         : Text(
                             '${s.assign} (${_selectedInvigilatorIds.length} ${s.staff})',
                             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
@@ -1662,10 +1768,76 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
                 ],
               ),
             ),
-          );
-        },
+          ),
+          if (_isAllocating)
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.65),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                child: Center(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 28),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? const Color(0xFF1E293B)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: const Color(0xFF007A87).withValues(alpha: 0.3),
+                        width: 1.5,
+                      ),
+                      boxShadow: const [
+                        BoxShadow(color: Colors.black38, blurRadius: 24, spreadRadius: 4),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3.5,
+                            color: Color(0xFF007A87),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          'Assigning Duty...',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white
+                                : Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Allocating staff, generating gate passes, and updating rosters.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white70
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
+  },
+),
+);
   }
 
   Widget _buildShiftCard({
@@ -1774,9 +1946,13 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
     final repMin = _parseTimeToMinutes(_reportingTime);
     final excMin = _parseTimeToMinutes(_excellentUntil);
     final goodMin = _parseTimeToMinutes(_goodUntil);
+    final startMin = _parseTimeToMinutes(_dutyStartTime);
+    final endMin = _parseTimeToMinutes(_dutyEndTime);
 
     if (repMin >= excMin || excMin >= goodMin) {
-      _timingValidationError = 'Invalid order: Reporting Time < Excellent Until < Good Until';
+      _timingValidationError = 'Invalid arrival order: Reporting Time < Excellent Until < Good Until';
+    } else if (startMin >= endMin) {
+      _timingValidationError = 'Invalid duty timing: Duty Start Time must be before Duty End Time';
     } else {
       _timingValidationError = null;
     }
@@ -1821,20 +1997,39 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
     required String rateFormatted,
     required int totalAmount,
     required List<Invigilator> selectedStaff,
+    required String dutyStartTime,
+    required String dutyEndTime,
   }) {
     final s = S.of(context)!;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
+    final cardBorder = isDark ? Colors.white12 : Colors.grey.shade300;
+    final textPrimary = isDark ? Colors.white : const Color(0xFF0F172A);
+    final textSecondary = isDark ? Colors.white70 : Colors.grey.shade700;
+
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: const Color(0xFF007A87).withValues(alpha: isDark ? 0.4 : 0.2)),
+        ),
         title: Row(
           children: [
-            const Icon(Icons.assignment_turned_in, color: Color(0xFF007A87), size: 26),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF007A87).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.assignment_turned_in_rounded, color: Color(0xFF007A87), size: 24),
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 s.confirmAssignment,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary),
               ),
             ),
           ],
@@ -1850,34 +2045,34 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF007A87).withValues(alpha: 0.08),
+                    color: const Color(0xFF007A87).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF007A87).withValues(alpha: 0.2)),
+                    border: Border.all(color: const Color(0xFF007A87).withValues(alpha: 0.25)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.book, size: 16, color: Color(0xFF007A87)),
+                          const Icon(Icons.bookmark_added_rounded, size: 16, color: Color(0xFF007A87)),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
                               session.examName,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textPrimary),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Row(
                         children: [
-                          Icon(Icons.business, size: 16, color: Colors.grey.shade700),
+                          Icon(Icons.location_city_rounded, size: 16, color: textSecondary),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
                               '${s.center}: ${session.centerName}',
-                              style: TextStyle(color: Colors.grey.shade800, fontSize: 13),
+                              style: TextStyle(color: textSecondary, fontSize: 12.5),
                             ),
                           ),
                         ],
@@ -1885,25 +2080,27 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
 
-                // Shift & Dates Info
+                // Shift & Dates Info Row
                 Row(
                   children: [
                     Expanded(
                       child: Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
+                          color: cardBg,
                           borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: cardBorder),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(s.selectShift, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                            const SizedBox(height: 2),
+                            Text(s.selectShift, style: TextStyle(fontSize: 10.5, color: textSecondary)),
+                            const SizedBox(height: 3),
                             Text('${s.shift} $shift', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF007A87))),
-                            Text('$rateFormatted / ${s.staff}', style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
+                            const SizedBox(height: 1),
+                            Text('$rateFormatted / ${s.staff}', style: TextStyle(fontSize: 11, color: textSecondary)),
                           ],
                         ),
                       ),
@@ -1913,20 +2110,22 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
                       child: Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
+                          color: cardBg,
                           borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: cardBorder),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(s.date, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                            const SizedBox(height: 2),
-                            Text('${dates.length} ${s.date}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            Text(s.date, style: TextStyle(fontSize: 10.5, color: textSecondary)),
+                            const SizedBox(height: 3),
+                            Text('${dates.length} ${s.date}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textPrimary)),
+                            const SizedBox(height: 1),
                             Text(
                               dates.map((d) => DateFormat('dd MMM').format(DateTime.tryParse(d) ?? DateTime.now())).join(', '),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                              style: TextStyle(fontSize: 11, color: textSecondary),
                             ),
                           ],
                         ),
@@ -1934,25 +2133,73 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
+
+                // Duty & Exam Schedule Box
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: cardBg,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: cardBorder),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.timer_outlined, size: 14, color: Color(0xFF7C3AED)),
+                          const SizedBox(width: 5),
+                          Text('Exam Schedule', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: textPrimary)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text('Start: $dutyStartTime', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0284C7))),
+                          ),
+                          Expanded(
+                            child: Text('End: $dutyEndTime', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7C3AED))),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Icon(Icons.lock_clock, size: 12, color: Colors.amber.shade700),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              'Exit enabled only after exam end ($dutyEndTime)',
+                              style: TextStyle(fontSize: 10, color: textSecondary, fontStyle: FontStyle.italic),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
 
                 // Selected Invigilators List
                 Text(
                   '${s.selectedInvigilators} (${selectedStaff.length}):',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textPrimary),
                 ),
                 const SizedBox(height: 6),
                 ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 160),
+                  constraints: const BoxConstraints(maxHeight: 140),
                   child: Container(
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade300),
+                      color: isDark ? const Color(0xFF0B132B).withValues(alpha: 0.6) : Colors.white,
+                      border: Border.all(color: cardBorder),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: ListView.separated(
                       shrinkWrap: true,
                       itemCount: selectedStaff.length,
-                      separatorBuilder: (ctx, idx) => Divider(height: 1, color: Colors.grey.shade200),
+                      separatorBuilder: (ctx, idx) => Divider(height: 1, color: cardBorder),
                       itemBuilder: (context, i) {
                         final staff = selectedStaff[i];
                         return Padding(
@@ -1961,7 +2208,7 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
                             children: [
                               CircleAvatar(
                                 radius: 12,
-                                backgroundColor: const Color(0xFF007A87).withValues(alpha: 0.1),
+                                backgroundColor: const Color(0xFF007A87).withValues(alpha: 0.2),
                                 child: Text('${i + 1}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF007A87))),
                               ),
                               const SizedBox(width: 10),
@@ -1969,12 +2216,19 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(staff.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                    Text('${s.resourceId}: ${staff.resourceId} • ${staff.mobile}', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                                    Text(staff.name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textPrimary)),
+                                    Text('${s.resourceId}: ${staff.resourceId} • ${staff.mobile}', style: TextStyle(fontSize: 11, color: textSecondary)),
                                   ],
                                 ),
                               ),
-                              Text('${s.shift} $shift', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF007A87))),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF007A87).withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text('${s.shift} $shift', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF007A87))),
+                              ),
                             ],
                           ),
                         );
@@ -1982,15 +2236,15 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
 
-                // Total Remuneration Summary
+                // Total Remuneration Summary Box
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.08),
+                    color: Colors.green.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                    border: Border.all(color: Colors.green.withValues(alpha: 0.35)),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1998,35 +2252,42 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(s.totalRemuneration, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.black87)),
+                          Text(s.totalRemuneration, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textPrimary)),
+                          const SizedBox(height: 2),
                           Text('${selectedStaff.length} ${s.staff} × ${dates.length} ${s.date} × $rateFormatted',
-                              style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
+                              style: TextStyle(fontSize: 11, color: textSecondary)),
                         ],
                       ),
                       Text(
                         'Total: ₹$totalAmount',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.green),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 10),
 
-                // Arrival Timing Info
+                // Arrival Timing Info Box
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
+                    color: cardBg,
                     borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: cardBorder),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Arrival Timing', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                      Text('Arrival Timing Thresholds', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: textPrimary)),
                       const SizedBox(height: 4),
-                      Text('Reporting: $_reportingTime', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                      Text('Excellent Until: $_excellentUntil', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.green.shade700)),
-                      Text('Good Until: $_goodUntil', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.orange.shade700)),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Reporting: $_reportingTime', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: textPrimary)),
+                          Text('Excellent: $_excellentUntil', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Colors.green.shade600)),
+                          Text('Good: $_goodUntil', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Colors.orange.shade600)),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -2037,7 +2298,7 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(s.cancel),
+            child: Text(s.cancel, style: TextStyle(color: textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -2213,6 +2474,17 @@ class _SessionAssignmentScreenState extends ConsumerState<SessionAssignmentScree
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/admin_dashboard/allocate_duty');
+            }
+          },
+        ),
         title: Text(session.examName, style: const TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(

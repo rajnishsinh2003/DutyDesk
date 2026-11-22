@@ -69,6 +69,17 @@ class _AuditorDashboardScreenState extends ConsumerState<AuditorDashboardScreen>
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/login');
+            }
+          },
+        ),
         backgroundColor: brandColor,
         foregroundColor: Colors.white,
         elevation: 0,

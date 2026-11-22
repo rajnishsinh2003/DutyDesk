@@ -43,6 +43,7 @@ class _BundleHandoverDialogState extends ConsumerState<BundleHandoverDialog> {
 
   late TextEditingController _primaryCtrl;
   final _notesCtrl = TextEditingController();
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -62,35 +63,40 @@ class _BundleHandoverDialogState extends ConsumerState<BundleHandoverDialog> {
   }
 
   void _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate() || _isSubmitting) return;
+    setState(() => _isSubmitting = true);
     HapticFeedback.mediumImpact();
 
-    final notifier = ref.read(answerSheetProvider.notifier);
+    try {
+      final notifier = ref.read(answerSheetProvider.notifier);
 
-    if (widget.handoverType == BundleHandoverType.superintendentReceive) {
-      await notifier.handoverToSuperintendent(
-        bundleId: widget.bundle.id,
-        superintendentName: _primaryCtrl.text.trim(),
-        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-      );
-    } else {
-      await notifier.dispatchToEvaluationCamp(
-        bundleId: widget.bundle.id,
-        courierTrackingNo: _primaryCtrl.text.trim(),
-        authorizedBy: widget.bundle.superintendentName ?? 'Center Superintendent',
-        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-      );
-    }
+      if (widget.handoverType == BundleHandoverType.superintendentReceive) {
+        await notifier.handoverToSuperintendent(
+          bundleId: widget.bundle.id,
+          superintendentName: _primaryCtrl.text.trim(),
+          notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        );
+      } else {
+        await notifier.dispatchToEvaluationCamp(
+          bundleId: widget.bundle.id,
+          courierTrackingNo: _primaryCtrl.text.trim(),
+          authorizedBy: widget.bundle.superintendentName ?? 'Center Superintendent',
+          notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        );
+      }
 
-    if (mounted) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('✅ Bundle custody updated for ${widget.bundle.bundleCode}'),
-          backgroundColor: const Color(0xFF10B981),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Bundle custody updated for ${widget.bundle.bundleCode}'),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -249,15 +255,23 @@ class _BundleHandoverDialogState extends ConsumerState<BundleHandoverDialog> {
                   ),
                   const Spacer(),
                   ElevatedButton.icon(
-                    icon: const Icon(Icons.check_circle_rounded, size: 18),
-                    label: Text(isReceive ? 'Acknowledge Receipt' : 'Confirm Dispatch'),
+                    icon: _isSubmitting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.check_circle_rounded, size: 18),
+                    label: Text(_isSubmitting
+                        ? 'Processing...'
+                        : (isReceive ? 'Acknowledge Receipt' : 'Confirm Dispatch')),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: isReceive ? const Color(0xFF2563EB) : const Color(0xFF10B981),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    onPressed: _submit,
+                    onPressed: _isSubmitting ? null : _submit,
                   ),
                 ],
               ),

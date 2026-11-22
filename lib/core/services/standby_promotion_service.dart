@@ -105,60 +105,25 @@ class StandbyEngineNotifier extends Notifier<StandbyEngineState> {
     return const StandbyEngineState();
   }
 
-  /// Start the standby auto-promotion monitoring engine
+  /// Start the standby monitoring engine (manual admin dispatch mode)
   void startMonitoring({int graceMinutes = 30}) {
     _monitorTimer?.cancel();
     state = state.copyWith(
-      isMonitoring: true,
+      isMonitoring: false, // Keep automatic background dispatch disabled
       noShowGraceMinutes: graceMinutes,
     );
-
-    // Check every 2 minutes for no-shows
-    _monitorTimer = Timer.periodic(const Duration(minutes: 2), (_) {
-      _scanForNoShows();
-    });
-
-    // Immediate first scan
-    _scanForNoShows();
-    log('🔄 Standby Auto-Promotion Engine started (grace: ${graceMinutes}min)');
+    log('ℹ️ Standby Engine: Manual Admin Assignment Mode (automatic background dispatch disabled)');
   }
 
   /// Stop monitoring
   void stopMonitoring() {
     _monitorTimer?.cancel();
     state = state.copyWith(isMonitoring: false);
-    log('⏹️ Standby Auto-Promotion Engine stopped');
+    log('⏹️ Standby Engine stopped');
   }
 
-  /// Scan for no-shows and auto-promote standby replacements
-  void _scanForNoShows() {
-    final duties = ref.read(globalDutyProvider);
-    final invs = ref.read(invigilatorProvider);
-    final now = DateTime.now();
-
-    for (final duty in duties) {
-      // Only check accepted duties that haven't clocked in
-      if (duty.status != 'accepted') continue;
-      if (duty.isReached) continue; // Already clocked in
-      if (duty.isStandbyReplacement) continue; // Already a standby
-
-      // Parse the duty reporting time and check if grace period has expired
-      final dutyDate = _parseDutyDateTime(duty.date, duty.reportingTime);
-      if (dutyDate == null) continue;
-
-      final graceDeadline = dutyDate.add(Duration(minutes: state.noShowGraceMinutes));
-      if (now.isBefore(graceDeadline)) continue; // Still within grace period
-
-      // This duty is a no-show! Find a standby replacement
-      log('⚠️ No-show detected: ${duty.examName} — ${duty.invigilatorId}');
-      _autoPromoteStandby(
-        noShowDuty: duty,
-        allInvs: invs,
-        allDuties: duties,
-        reason: StandbyPromotionReason.noShow,
-      );
-    }
-  }
+  // Automatic background dispatching is intentionally disabled.
+  // Standby replacements must strictly be assigned by the Admin manually.
 
   /// Manually trigger standby promotion for a specific duty (admin action)
   Future<void> promoteStandbyForDuty({
@@ -275,47 +240,6 @@ class StandbyEngineNotifier extends Notifier<StandbyEngineState> {
     }
   }
 
-  /// Parse duty date + reporting time into DateTime
-  DateTime? _parseDutyDateTime(String dateStr, String timeStr) {
-    try {
-      // Expected format: "2026-10-05" or "05/10/2026"
-      DateTime date;
-      if (dateStr.contains('-')) {
-        date = DateTime.parse(dateStr);
-      } else if (dateStr.contains('/')) {
-        final parts = dateStr.split('/');
-        if (parts.length == 3) {
-          date = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
-        } else {
-          return null;
-        }
-      } else {
-        return null;
-      }
-
-      // Parse reporting time: "06:00 AM" or "14:30"
-      final cleanTime = timeStr.trim().toUpperCase();
-      int hour = 0;
-      int minute = 0;
-
-      if (cleanTime.contains('AM') || cleanTime.contains('PM')) {
-        final timePart = cleanTime.replaceAll(RegExp(r'[APM\s]'), '');
-        final tParts = timePart.split(':');
-        hour = int.tryParse(tParts[0]) ?? 0;
-        minute = tParts.length > 1 ? (int.tryParse(tParts[1]) ?? 0) : 0;
-        if (cleanTime.contains('PM') && hour < 12) hour += 12;
-        if (cleanTime.contains('AM') && hour == 12) hour = 0;
-      } else {
-        final tParts = cleanTime.split(':');
-        hour = int.tryParse(tParts[0]) ?? 0;
-        minute = tParts.length > 1 ? (int.tryParse(tParts[1]) ?? 0) : 0;
-      }
-
-      return DateTime(date.year, date.month, date.day, hour, minute);
-    } catch (_) {
-      return null;
-    }
-  }
 
   /// Update the no-show grace period
   void setGracePeriod(int minutes) {

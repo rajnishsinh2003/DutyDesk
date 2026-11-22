@@ -224,17 +224,17 @@ class DigitalGatePassDialog extends StatelessWidget {
                           children: [
                             Expanded(child: _buildInfoRow('Report Time', duty.reportingTime, Icons.alarm_on)),
                             const SizedBox(width: 10),
-                            Expanded(
-                              child: _buildInfoRow(
-                                'Status',
-                                duty.status.toUpperCase(),
-                                Icons.verified_user_outlined,
-                                valueColor: duty.status.toLowerCase() == 'accepted'
-                                    ? const Color(0xFF10B981)
-                                    : const Color(0xFFF59E0B),
-                              ),
-                            ),
+                            Expanded(child: _buildInfoRow('Exam Time', '${duty.dutyStartTime} - ${duty.dutyEndTime}', Icons.timer_outlined)),
                           ],
+                        ),
+                        const Divider(color: Colors.white10, height: 14),
+                        _buildInfoRow(
+                          'Status',
+                          duty.status.toUpperCase(),
+                          Icons.verified_user_outlined,
+                          valueColor: duty.status.toLowerCase() == 'accepted'
+                              ? const Color(0xFF10B981)
+                              : const Color(0xFFF59E0B),
                         ),
                       ],
                     ),

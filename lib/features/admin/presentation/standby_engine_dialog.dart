@@ -85,14 +85,14 @@ class _StandbyEngineDialogState extends ConsumerState<StandbyEngineDialog> with 
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Standby & Auto-Promotion',
+                          'Standby & Duty Replacement',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         Text(
-                          'Automated no-show replacement engine',
+                          'Manual Admin-controlled assignment',
                           style: TextStyle(
                             fontSize: 12,
                             color: isDark ? Colors.white60 : Colors.black54,
@@ -101,60 +101,32 @@ class _StandbyEngineDialogState extends ConsumerState<StandbyEngineDialog> with 
                       ],
                     ),
                   ),
-                  // Engine Status Badge & Toggle
+                  // Manual Mode Badge
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: engineState.isMonitoring
-                          ? const Color(0xFF10B981).withValues(alpha: 0.15)
-                          : Colors.grey.withValues(alpha: 0.15),
+                      color: const Color(0xFF007A87).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: engineState.isMonitoring
-                            ? const Color(0xFF10B981)
-                            : Colors.grey,
+                        color: const Color(0xFF007A87),
                         width: 1,
                       ),
                     ),
-                    child: Row(
+                    child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: engineState.isMonitoring
-                                ? const Color(0xFF10B981)
-                                : Colors.grey,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
+                        Icon(Icons.admin_panel_settings_rounded, size: 13, color: Color(0xFF007A87)),
+                        SizedBox(width: 4),
                         Text(
-                          engineState.isMonitoring ? 'LIVE' : 'OFF',
+                          'MANUAL DISPATCH',
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 10,
                             fontWeight: FontWeight.bold,
-                            color: engineState.isMonitoring
-                                ? const Color(0xFF10B981)
-                                : Colors.grey,
+                            color: Color(0xFF007A87),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Switch(
-                    value: engineState.isMonitoring,
-                    activeThumbColor: const Color(0xFF10B981),
-                    onChanged: (val) {
-                      HapticFeedback.selectionClick();
-                      if (val) {
-                        engineNotifier.startMonitoring(graceMinutes: engineState.noShowGraceMinutes);
-                      } else {
-                        engineNotifier.stopMonitoring();
-                      }
-                    },
                   ),
                   IconButton(
                     icon: const Icon(Icons.close_rounded),
@@ -486,7 +458,7 @@ class _PromotionLogTab extends StatelessWidget {
   }
 }
 
-class _EmergencyDispatchTab extends ConsumerWidget {
+class _EmergencyDispatchTab extends ConsumerStatefulWidget {
   final List<ExamDuty> duties;
   final List<Invigilator> invs;
   final bool isDark;
@@ -498,7 +470,18 @@ class _EmergencyDispatchTab extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_EmergencyDispatchTab> createState() => _EmergencyDispatchTabState();
+}
+
+class _EmergencyDispatchTabState extends ConsumerState<_EmergencyDispatchTab> {
+  String? _dispatchingDutyId;
+
+  @override
+  Widget build(BuildContext context) {
+    final duties = widget.duties;
+    final invs = widget.invs;
+    final isDark = widget.isDark;
+
     if (duties.isEmpty) {
       return Center(
         child: Column(
@@ -530,6 +513,7 @@ class _EmergencyDispatchTab extends ConsumerWidget {
           (i) => i.id == duty.invigilatorId,
           orElse: () => Invigilator(id: '', name: 'Staff', resourceId: '-', mobile: '', mockDutyCount: 0),
         );
+        final isDispatching = _dispatchingDutyId == duty.id;
 
         return Container(
           padding: const EdgeInsets.all(14),
@@ -563,8 +547,14 @@ class _EmergencyDispatchTab extends ConsumerWidget {
                 ),
               ),
               ElevatedButton.icon(
-                icon: const Icon(Icons.bolt_rounded, size: 16),
-                label: const Text('Dispatch'),
+                icon: isDispatching
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.bolt_rounded, size: 16),
+                label: Text(isDispatching ? 'Dispatching...' : 'Dispatch'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFF59E0B),
                   foregroundColor: Colors.white,
@@ -572,22 +562,29 @@ class _EmergencyDispatchTab extends ConsumerWidget {
                   textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                onPressed: () async {
-                  HapticFeedback.heavyImpact();
-                  await ref.read(standbyEngineProvider.notifier).promoteStandbyForDuty(
-                    dutyId: duty.id,
-                    reason: StandbyPromotionReason.emergencyVacancy,
-                  );
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('⚡ Emergency standby dispatched for ${inv.name}!'),
-                        backgroundColor: const Color(0xFF10B981),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  }
-                },
+                onPressed: isDispatching
+                    ? null
+                    : () async {
+                        setState(() => _dispatchingDutyId = duty.id);
+                        HapticFeedback.heavyImpact();
+                        try {
+                          await ref.read(standbyEngineProvider.notifier).promoteStandbyForDuty(
+                            dutyId: duty.id,
+                            reason: StandbyPromotionReason.emergencyVacancy,
+                          );
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('⚡ Emergency standby dispatched for ${inv.name}!'),
+                                backgroundColor: const Color(0xFF10B981),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        } finally {
+                          if (mounted) setState(() => _dispatchingDutyId = null);
+                        }
+                      },
               ),
             ],
           ),

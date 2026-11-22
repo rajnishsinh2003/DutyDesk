@@ -26,6 +26,7 @@ class _PacketTamperDialogState extends ConsumerState<PacketTamperDialog> {
   final _reporterCtrl = TextEditingController(text: 'Invigilator / Flying Squad');
   final _remarksCtrl = TextEditingController();
   String _tamperCategory = 'Broken / Peeled Tamper Hologram';
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -35,26 +36,31 @@ class _PacketTamperDialogState extends ConsumerState<PacketTamperDialog> {
   }
 
   void _submitReport() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate() || _isSubmitting) return;
+    setState(() => _isSubmitting = true);
     HapticFeedback.heavyImpact();
 
-    final fullRemarks = '[$_tamperCategory] ${_remarksCtrl.text.trim()}';
+    try {
+      final fullRemarks = '[$_tamperCategory] ${_remarksCtrl.text.trim()}';
 
-    await ref.read(questionPaperProvider.notifier).reportTamper(
-      packetId: widget.packet.id,
-      reporterName: _reporterCtrl.text.trim(),
-      remarks: fullRemarks,
-    );
-
-    if (mounted) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('🚨 CRITICAL INCIDENT LOGGED! Alert sent to Control Room & COE.'),
-          backgroundColor: Color(0xFFEF4444),
-          behavior: SnackBarBehavior.floating,
-        ),
+      await ref.read(questionPaperProvider.notifier).reportTamper(
+        packetId: widget.packet.id,
+        reporterName: _reporterCtrl.text.trim(),
+        remarks: fullRemarks,
       );
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🚨 CRITICAL INCIDENT LOGGED! Alert sent to Control Room & COE.'),
+            backgroundColor: Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -234,15 +240,21 @@ class _PacketTamperDialogState extends ConsumerState<PacketTamperDialog> {
                   ),
                   const Spacer(),
                   ElevatedButton.icon(
-                    icon: const Icon(Icons.report_problem_rounded, size: 18),
-                    label: const Text('Submit Security Alert'),
+                    icon: _isSubmitting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.report_problem_rounded, size: 18),
+                    label: Text(_isSubmitting ? 'Logging Alert...' : 'Submit Security Alert'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFEF4444),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    onPressed: _submitReport,
+                    onPressed: _isSubmitting ? null : _submitReport,
                   ),
                 ],
               ),
