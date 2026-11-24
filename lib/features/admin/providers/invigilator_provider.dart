@@ -28,6 +28,10 @@ class Invigilator {
   final String? faceLeftUrl;
   final String? faceRightUrl;
   final DateTime? faceEnrolledAt;
+  // ML-based face embedding fields (new system)
+  final Map<String, List<double>>? faceEmbeddings;
+  final String? faceModelVersion;
+  final bool needsReEnrollment;
 
   Invigilator({
     required this.id,
@@ -51,6 +55,9 @@ class Invigilator {
     this.faceLeftUrl,
     this.faceRightUrl,
     this.faceEnrolledAt,
+    this.faceEmbeddings,
+    this.faceModelVersion,
+    this.needsReEnrollment = false,
   });
 
   Invigilator copyWith({
@@ -70,6 +77,14 @@ class Invigilator {
     String? standbyForCenter,
     double? latitude,
     double? longitude,
+    bool? isFaceEnrolled,
+    String? faceFrontUrl,
+    String? faceLeftUrl,
+    String? faceRightUrl,
+    DateTime? faceEnrolledAt,
+    Map<String, List<double>>? faceEmbeddings,
+    String? faceModelVersion,
+    bool? needsReEnrollment,
   }) {
     return Invigilator(
       id: id ?? this.id,
@@ -93,6 +108,9 @@ class Invigilator {
       faceLeftUrl: faceLeftUrl ?? this.faceLeftUrl,
       faceRightUrl: faceRightUrl ?? this.faceRightUrl,
       faceEnrolledAt: faceEnrolledAt ?? this.faceEnrolledAt,
+      faceEmbeddings: faceEmbeddings ?? this.faceEmbeddings,
+      faceModelVersion: faceModelVersion ?? this.faceModelVersion,
+      needsReEnrollment: needsReEnrollment ?? this.needsReEnrollment,
     );
   }
 }
@@ -116,10 +134,30 @@ class InvigilatorNotifier extends Notifier<List<Invigilator>> {
         final Timestamp? timestamp = data['lastMockAssignedDate'];
         final Timestamp? faceEnrolledTs = data['faceEnrolledAt'];
         final List<dynamic> datesRaw = data['unavailableDates'] ?? [];
-        final bool faceEnrolled = data['isFaceEnrolled'] == true ||
+        final Map<String, dynamic>? rawEmbeddings = data['faceEmbeddings'] is Map ? (data['faceEmbeddings'] as Map).cast<String, dynamic>() : null;
+        Map<String, List<double>>? parsedEmbeddings;
+        if (rawEmbeddings != null) {
+          parsedEmbeddings = {};
+          rawEmbeddings.forEach((k, v) {
+            if (v is List) {
+              parsedEmbeddings![k] = v.map((e) => (e as num).toDouble()).toList();
+            }
+          });
+        }
+
+        final bool hasEmbeddings = parsedEmbeddings != null &&
+            parsedEmbeddings.containsKey('front') &&
+            parsedEmbeddings['front']!.isNotEmpty;
+
+        final bool legacyEnrolled = data['isFaceEnrolled'] == true ||
             data['faceVerified'] == true ||
             data['faceFrontUrl'] != null ||
             data['facePhotoUrl'] != null;
+
+        // Migration logic: If user was enrolled under old pixel/Supabase image system
+        // but has no TFLite embeddings in Firestore, flag them for re-enrollment.
+        final bool needsReEnroll = legacyEnrolled && !hasEmbeddings;
+        final bool isEnrolled = hasEmbeddings;
 
         return Invigilator(
           id: doc.id,
@@ -138,11 +176,14 @@ class InvigilatorNotifier extends Notifier<List<Invigilator>> {
           standbyForCenter: data['standbyForCenter'],
           latitude: (data['latitude'] as num?)?.toDouble(),
           longitude: (data['longitude'] as num?)?.toDouble(),
-          isFaceEnrolled: faceEnrolled,
+          isFaceEnrolled: isEnrolled,
           faceFrontUrl: data['faceFrontUrl'] ?? data['facePhotoUrl'],
           faceLeftUrl: data['faceLeftUrl'],
           faceRightUrl: data['faceRightUrl'],
           faceEnrolledAt: faceEnrolledTs?.toDate(),
+          faceEmbeddings: parsedEmbeddings,
+          faceModelVersion: data['faceModelVersion'],
+          needsReEnrollment: needsReEnroll,
         );
       }).toList();
     }, onError: (error) {

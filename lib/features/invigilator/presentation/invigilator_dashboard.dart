@@ -74,7 +74,7 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
     final matchingInvs = invs.where((i) => i.id == auth.userId).toList();
     if (matchingInvs.isEmpty) return; // data not loaded yet
     final currentInv = matchingInvs.first;
-    if (currentInv.isFaceEnrolled) return; // already enrolled
+    if (currentInv.isFaceEnrolled && !currentInv.needsReEnrollment) return; // already enrolled with valid embeddings
 
     _faceEnrollmentDialogShown = true;
     showDialog(
@@ -1910,7 +1910,8 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                       resourceId: auth.userId,
                       examName: duty.examName,
                       centerName: duty.centerName,
-                      faceFrontUrl: matchedInv?.faceFrontUrl,
+                      invigilatorDocId: matchedInv?.id ?? auth.userId,
+                      preloadedEmbeddings: matchedInv?.faceEmbeddings,
                     );
 
                     if (faceResult == null || !faceResult.isVerified) {

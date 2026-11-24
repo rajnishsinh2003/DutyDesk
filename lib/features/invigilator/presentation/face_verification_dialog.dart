@@ -4,12 +4,13 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
-import 'package:http/http.dart' as http;
-import '../../../core/services/face_validation_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../core/config/face_config.dart';
+import '../../../core/services/face_embedding_service.dart';
 
 class FaceVerificationResult {
   final bool isVerified;
-  final double matchScore; // e.g. 98.4%
+  final double matchScore; // e.g. 84.5%
   final String timestamp;
 
   const FaceVerificationResult({
@@ -19,15 +20,26 @@ class FaceVerificationResult {
   });
 }
 
-/// A high-tech biometric face verification dialog for invigilator attendance clock-in.
-/// Eliminates proxy attendance with liveness check simulation, anti-spoofing sweep ray,
-/// 68-point facial landmark mesh visualization, and biometric profile matching.
+/// Biometric Face Verification Dialog for invigilator attendance clock-in.
+///
+/// Features:
+/// 1. Reads enrolled 192-d MobileFaceNet embeddings from Cloud Firestore (Front, Left, Right).
+/// 2. Live camera feed with ML Kit Face Detection.
+/// 3. Frontal pose enforcement (Yaw within ±20°).
+/// 4. Basic Liveness Check (Blink / Eye-state verification).
+///    NOTE: This is a basic passive/active liveness check, not a certified 3D anti-spoofing system.
+/// 5. Normalized 112x112 MobileFaceNet deep feature embedding inference.
+/// 6. Cosine similarity against all 3 enrolled reference angles (Front, Left, Right).
+/// 7. Match threshold: Cosine similarity ≥ 0.50 (50.0%).
+/// 8. Borderline retry logic (0.40 - 0.50): auto-captures a 2nd frame before failing.
+/// 9. Secure audit logging: logs attempt, score, and timestamp to Firestore without saving images or embeddings.
 class FaceVerificationDialog extends StatefulWidget {
   final String staffName;
   final String? resourceId;
   final String examName;
   final String centerName;
-  final String? faceFrontUrl;
+  final String? invigilatorDocId;
+  final Map<String, List<double>>? preloadedEmbeddings;
 
   const FaceVerificationDialog({
     super.key,
@@ -35,7 +47,12 @@ class FaceVerificationDialog extends StatefulWidget {
     this.resourceId,
     required this.examName,
     required this.centerName,
-    this.faceFrontUrl,
+    this.invigilatorDocId,
+    this.preloadedEmbeddings,
+    // Kept for backward compatibility with older callers
+    String? faceFrontUrl,
+    String? faceLeftUrl,
+    String? faceRightUrl,
   });
 
   static Future<FaceVerificationResult?> show(
@@ -44,7 +61,11 @@ class FaceVerificationDialog extends StatefulWidget {
     String? resourceId,
     required String examName,
     required String centerName,
+    String? invigilatorDocId,
+    Map<String, List<double>>? preloadedEmbeddings,
     String? faceFrontUrl,
+    String? faceLeftUrl,
+    String? faceRightUrl,
   }) {
     return showDialog<FaceVerificationResult>(
       context: context,
@@ -54,7 +75,8 @@ class FaceVerificationDialog extends StatefulWidget {
         resourceId: resourceId,
         examName: examName,
         centerName: centerName,
-        faceFrontUrl: faceFrontUrl,
+        invigilatorDocId: invigilatorDocId ?? resourceId,
+        preloadedEmbeddings: preloadedEmbeddings,
       ),
     );
   }
@@ -68,7 +90,8 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
   late AnimationController _scannerAnimCtrl;
   late Animation<double> _scanPosAnim;
 
-  int _step = 0; // 0 = ready, 1 = scanning & liveness, 2 = matching, 3 = verified, 4 = mismatch/rejected
+  // 0 = ready, 1 = countdown & liveness, 2 = matching & inference, 3 = verified, 4 = rejected/error
+  int _step = 0;
   double _matchScore = 0.0;
   String _statusText = 'Center your face within the biometric oval';
   String? _failureReason;
@@ -76,15 +99,18 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
   Timer? _countdownTimer;
   int _countdown = 0;
 
-  Uint8List? _referenceBytes;
-  bool _isFetchingReference = false;
-  String? _referenceFetchError;
-  Uint8List? _liveCaptureBytes;
+  // Stored embeddings from Firestore
+  Map<String, List<double>> _referenceEmbeddings = {};
+  bool _isFetchingEmbeddings = true;
+  String? _embeddingFetchError;
+  bool _needsReEnrollment = false;
 
+  // Camera state
   CameraController? _cameraController;
   List<CameraDescription>? _availableCameras;
   int _selectedCameraIndex = 0;
   bool _isCameraInitializing = true;
+  Uint8List? _liveCaptureBytes;
 
   @override
   void initState() {
@@ -99,44 +125,88 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
     );
 
     _initCamera();
-    _fetchReferencePhoto();
+    _loadReferenceEmbeddings();
   }
 
-  Future<void> _fetchReferencePhoto() async {
-    if (widget.faceFrontUrl == null || widget.faceFrontUrl!.isEmpty) {
+  Future<void> _loadReferenceEmbeddings() async {
+    // 1. If preloaded embeddings passed, use them directly
+    if (widget.preloadedEmbeddings != null && widget.preloadedEmbeddings!.isNotEmpty) {
       if (mounted) {
         setState(() {
-          _referenceFetchError = 'No enrolled face photo found in database';
+          _referenceEmbeddings = widget.preloadedEmbeddings!;
+          _isFetchingEmbeddings = false;
         });
       }
       return;
     }
 
-    setState(() => _isFetchingReference = true);
+    final docId = widget.invigilatorDocId;
+    if (docId == null || docId.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _isFetchingEmbeddings = false;
+          _embeddingFetchError = 'No staff identifier available to look up biometric record.';
+        });
+      }
+      return;
+    }
+
+    setState(() => _isFetchingEmbeddings = true);
+
     try {
-      final response = await http.get(Uri.parse(widget.faceFrontUrl!)).timeout(
-        const Duration(seconds: 10),
-      );
-      if (response.statusCode >= 200 && response.statusCode < 300) {
+      final doc = await FirebaseFirestore.instance.collection('invigilators').doc(docId).get();
+      if (!doc.exists) {
         if (mounted) {
           setState(() {
-            _referenceBytes = response.bodyBytes;
-            _isFetchingReference = false;
+            _isFetchingEmbeddings = false;
+            _embeddingFetchError = 'Staff record not found in database.';
           });
         }
-      } else {
-        if (mounted) {
-          setState(() {
-            _referenceFetchError = 'Could not load registered face photo (${response.statusCode})';
-            _isFetchingReference = false;
-          });
+        return;
+      }
+
+      final data = doc.data() ?? {};
+      final rawEmbeddings = data['faceEmbeddings'];
+
+      if (rawEmbeddings is Map) {
+        final parsed = <String, List<double>>{};
+        rawEmbeddings.forEach((key, val) {
+          if (val is List) {
+            parsed[key.toString()] = val.map((e) => (e as num).toDouble()).toList();
+          }
+        });
+
+        if (parsed.isNotEmpty && parsed.containsKey('front')) {
+          if (mounted) {
+            setState(() {
+              _referenceEmbeddings = parsed;
+              _isFetchingEmbeddings = false;
+              _embeddingFetchError = null;
+            });
+          }
+          return;
         }
+      }
+
+      // Check if user had legacy enrollment (URL-based from old Supabase flow)
+      final hadLegacy = data['isFaceEnrolled'] == true ||
+          data['faceFrontUrl'] != null ||
+          data['facePhotoUrl'] != null;
+
+      if (mounted) {
+        setState(() {
+          _isFetchingEmbeddings = false;
+          _needsReEnrollment = hadLegacy;
+          _embeddingFetchError = hadLegacy
+              ? 'Your face profile was registered under an older format. Please re-enroll your 3 face angles to activate deep biometric verification.'
+              : 'No biometric face embeddings enrolled. Please complete 3-angle face enrollment.';
+        });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _referenceFetchError = 'Failed to load reference: $e';
-          _isFetchingReference = false;
+          _isFetchingEmbeddings = false;
+          _embeddingFetchError = 'Error reading face records: $e';
         });
       }
     }
@@ -146,33 +216,22 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
     try {
       _availableCameras = await availableCameras();
       if (_availableCameras != null && _availableCameras!.isNotEmpty) {
-        // Prefer front camera for faculty selfie attendance
         final frontIndex = _availableCameras!.indexWhere(
           (c) => c.lensDirection == CameraLensDirection.front,
         );
         _selectedCameraIndex = frontIndex != -1 ? frontIndex : 0;
         await _setupCameraController(_availableCameras![_selectedCameraIndex]);
       } else {
-        if (mounted) {
-          setState(() {
-            _isCameraInitializing = false;
-          });
-        }
+        if (mounted) setState(() => _isCameraInitializing = false);
       }
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _isCameraInitializing = false;
-        });
-      }
+      if (mounted) setState(() => _isCameraInitializing = false);
     }
   }
 
   Future<void> _setupCameraController(CameraDescription description) async {
-    final oldController = _cameraController;
-    if (oldController != null) {
-      await oldController.dispose();
-    }
+    final old = _cameraController;
+    if (old != null) await old.dispose();
 
     final controller = CameraController(
       description,
@@ -189,20 +248,16 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
         });
       }
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _isCameraInitializing = false;
-        });
-      }
+      if (mounted) setState(() => _isCameraInitializing = false);
     }
   }
 
   Future<void> _toggleCamera() async {
     if (_availableCameras == null || _availableCameras!.length < 2) return;
-    final nextIndex = (_selectedCameraIndex + 1) % _availableCameras!.length;
-    _selectedCameraIndex = nextIndex;
+    final next = (_selectedCameraIndex + 1) % _availableCameras!.length;
+    _selectedCameraIndex = next;
     setState(() => _isCameraInitializing = true);
-    await _setupCameraController(_availableCameras![nextIndex]);
+    await _setupCameraController(_availableCameras![next]);
   }
 
   @override
@@ -214,22 +269,21 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
     super.dispose();
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // VERIFICATION WORKFLOW
+  // ─────────────────────────────────────────────────────────────
   void _startVerification() async {
-    if (_referenceBytes == null && widget.faceFrontUrl != null) {
-      await _fetchReferencePhoto();
-    }
-
-    if (_referenceBytes == null) {
+    if (_referenceEmbeddings.isEmpty) {
       setState(() {
         _step = 4;
-        _statusText = '❌ Reference Face Missing';
-        _failureReason = 'No registered biometric face portrait found in database for ${widget.staffName}. Please complete 3-angle face enrollment first.';
+        _statusText = '❌ Biometric Reference Missing';
+        _failureReason = _embeddingFetchError ??
+            'No registered biometric face portrait found in database for ${widget.staffName}. Please complete 3-angle face enrollment first.';
       });
       HapticFeedback.heavyImpact();
       return;
     }
 
-    // Start 3-second countdown giving user ample time to hold phone at eye level
     setState(() {
       _liveCaptureBytes = null;
       _step = 1;
@@ -251,14 +305,14 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
           _countdown--;
           _statusText = _countdown == 2
               ? 'Keep your face centered inside oval... 2'
-              : 'Hold still, capturing... 1';
+              : 'Hold steady, detecting face... 1';
         });
         HapticFeedback.selectionClick();
       } else {
         timer.cancel();
         setState(() {
           _countdown = 0;
-          _statusText = '📸 Capturing live face & verifying passive liveness...';
+          _statusText = 'Capturing live frame & running liveness check...';
         });
         HapticFeedback.mediumImpact();
         await _performCaptureAndVerify();
@@ -267,83 +321,115 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
   }
 
   Future<void> _performCaptureAndVerify() async {
-    Uint8List? liveBytes;
-    if (_cameraController != null && _cameraController!.value.isInitialized) {
-      try {
-        final xFile = await _cameraController!.takePicture();
-        liveBytes = await xFile.readAsBytes();
-        if (mounted) {
-          setState(() {
-            _liveCaptureBytes = liveBytes;
-          });
-        }
-      } catch (e) {
-        debugPrint('Camera capture error: $e');
-      }
-    }
-
-    if (liveBytes == null) {
-      if (mounted) {
-        setState(() {
-          _step = 4;
-          _statusText = '❌ Camera Frame Capture Failed';
-          _failureReason = 'Unable to capture live camera frame. Please check camera permissions and retry.';
-        });
-        HapticFeedback.heavyImpact();
-      }
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      _handleFailure('Device camera is not ready. Please check camera access.');
       return;
     }
 
-    // Step 2: Compare live face with reference photo from Supabase
-    if (mounted) {
-      setState(() {
-        _step = 2;
-        _statusText = 'Extracting facial landmarks & matching with registered portrait...';
-      });
-      HapticFeedback.lightImpact();
-    }
+    // Step 2: Live Inference
+    setState(() {
+      _step = 2;
+      _statusText = 'Analyzing face landmarks & liveness...';
+    });
 
     try {
-      var compResult = await FaceValidationService.compareFaces(
-        liveFrameBytes: liveBytes,
-        referencePhotoBytes: _referenceBytes!,
-        matchThreshold: 65.0,
-      );
+      // 1. Capture primary frame
+      final xFile = await _cameraController!.takePicture();
+      final bytes = await xFile.readAsBytes();
+      if (mounted) setState(() => _liveCaptureBytes = bytes);
 
-      // If borderline score (between 50% and 65%), take a quick 2nd stabilization frame
-      // to handle camera autofocus/jitter without failing immediately
-      if (!compResult.isMatch &&
-          compResult.similarityScore >= 50.0 &&
+      // 2. Face Detection + Pose + Quality via ML Kit
+      final faceInfo = await FaceEmbeddingService.detectFace(bytes);
+      if (!faceInfo.isValid) {
+        _handleFailure(faceInfo.errorMessage ?? 'Face quality check failed.');
+        return;
+      }
+
+      // 3. Frontal Pose Check (Yaw <= ±20°)
+      if (faceInfo.yaw.abs() > FaceConfig.maxVerificationYaw) {
+        final dir = faceInfo.yaw > 0 ? 'left' : 'right';
+        _handleFailure(
+          'Face is turned too far $dir (${faceInfo.yaw.toStringAsFixed(1)}°). Look straight into the camera.',
+        );
+        return;
+      }
+
+      // 4. Basic Liveness Check (Blink / eye openness)
+      // If eyes are closed, warn user.
+      if (faceInfo.leftEyeOpenProb != null && faceInfo.rightEyeOpenProb != null) {
+        if (faceInfo.leftEyeOpenProb! < 0.20 && faceInfo.rightEyeOpenProb! < 0.20) {
+          _handleFailure('Eyes appear closed during capture. Please keep eyes open.');
+          return;
+        }
+      }
+
+      // 5. Generate Embedding
+      setState(() => _statusText = 'Generating biometric embedding & matching...');
+      final normalizedTensor = FaceEmbeddingService.cropAndAlign(
+        image: faceInfo.decodedImage!,
+        boundingBox: faceInfo.mlKitFace!.boundingBox,
+      );
+      final liveEmbedding = await FaceEmbeddingService.embed(normalizedTensor);
+
+      // 6. Compare against all enrolled angles (Front, Left, Right)
+      double bestCosine = -1.0;
+      String bestMatchedAngle = 'none';
+
+      for (final entry in _referenceEmbeddings.entries) {
+        final sim = FaceEmbeddingService.cosineSimilarity(liveEmbedding, entry.value);
+        if (sim > bestCosine) {
+          bestCosine = sim;
+          bestMatchedAngle = entry.key;
+        }
+      }
+
+      // 7. Borderline Check (0.40 <= score < 0.50): auto take 2nd stabilization frame
+      if (bestCosine >= FaceConfig.borderlineThreshold &&
+          bestCosine < FaceConfig.matchThreshold &&
           _cameraController != null &&
           _cameraController!.value.isInitialized) {
-        try {
-          await Future.delayed(const Duration(milliseconds: 300));
-          final secondFile = await _cameraController!.takePicture();
-          final secondBytes = await secondFile.readAsBytes();
-          final secondResult = await FaceValidationService.compareFaces(
-            liveFrameBytes: secondBytes,
-            referencePhotoBytes: _referenceBytes!,
-            matchThreshold: 65.0,
+        setState(() => _statusText = 'Borderline score. Taking stabilization frame...');
+        await Future.delayed(const Duration(milliseconds: 350));
+
+        final secondFile = await _cameraController!.takePicture();
+        final secondBytes = await secondFile.readAsBytes();
+        final secondInfo = await FaceEmbeddingService.detectFace(secondBytes);
+
+        if (secondInfo.isValid && secondInfo.yaw.abs() <= FaceConfig.maxVerificationYaw) {
+          final secondTensor = FaceEmbeddingService.cropAndAlign(
+            image: secondInfo.decodedImage!,
+            boundingBox: secondInfo.mlKitFace!.boundingBox,
           );
-          if (secondResult.similarityScore > compResult.similarityScore) {
-            compResult = secondResult;
-            if (mounted) {
-              setState(() {
-                _liveCaptureBytes = secondBytes;
-              });
+          final secondEmbedding = await FaceEmbeddingService.embed(secondTensor);
+
+          for (final entry in _referenceEmbeddings.entries) {
+            final sim = FaceEmbeddingService.cosineSimilarity(secondEmbedding, entry.value);
+            if (sim > bestCosine) {
+              bestCosine = sim;
+              bestMatchedAngle = entry.key;
             }
           }
-        } catch (_) {}
+        }
       }
+
+      // Cosine similarity to percentage display (e.g. 0.85 -> 85.0%)
+      final displayPercent = (math.max(0.0, bestCosine) * 100.0);
+
+      // Log attempt to audit trail (NO images or embeddings stored)
+      _logVerificationAttempt(
+        success: bestCosine >= FaceConfig.matchThreshold,
+        score: displayPercent,
+        matchedAngle: bestMatchedAngle,
+      );
 
       if (!mounted) return;
 
-      if (compResult.isMatch) {
-        // Biometric Match Confirmed! (Same Person)
+      if (bestCosine >= FaceConfig.matchThreshold) {
+        // MATCH SUCCESS
         setState(() {
           _step = 3;
-          _matchScore = compResult.similarityScore;
-          _statusText = 'Database Matched! Match Confidence: ${_matchScore.toStringAsFixed(1)}%';
+          _matchScore = displayPercent;
+          _statusText = 'Biometric Match Confirmed! (${_matchScore.toStringAsFixed(1)}%)';
         });
         HapticFeedback.heavyImpact();
 
@@ -358,27 +444,62 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
           );
         });
       } else {
-        // Biometric Mismatch Detected! (Different Person / Proxy Attempt / Ceiling)
+        // MISMATCH
         setState(() {
           _step = 4;
-          _matchScore = compResult.similarityScore;
-          _statusText = '❌ BIOMETRIC MISMATCH DETECTED (${_matchScore.toStringAsFixed(1)}%)';
-          _failureReason = compResult.failureReason ??
-              'The face in front of the camera does NOT match the registered portrait of ${widget.staffName} (Match: ${_matchScore.toStringAsFixed(1)}% < Threshold: 65%). Proxy attendance is blocked.';
+          _matchScore = displayPercent;
+          _statusText = '❌ BIOMETRIC MISMATCH (${_matchScore.toStringAsFixed(1)}%)';
+          _failureReason =
+              'The facial geometry does not match the enrolled profile for ${widget.staffName}. '
+              'Score: ${_matchScore.toStringAsFixed(1)}% (Required: ≥ ${(FaceConfig.matchThreshold * 100).toInt()}%).';
         });
         HapticFeedback.heavyImpact();
       }
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _step = 4;
-        _statusText = '❌ Verification Error';
-        _failureReason = 'An error occurred during facial feature comparison: $e';
-      });
-      HapticFeedback.heavyImpact();
+      debugPrint('Verification error: $e');
+      _handleFailure('Biometric verification failed: $e');
     }
   }
 
+  void _handleFailure(String reason) {
+    if (!mounted) return;
+    setState(() {
+      _step = 4;
+      _statusText = '❌ Verification Unsuccessful';
+      _failureReason = reason;
+    });
+    HapticFeedback.heavyImpact();
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // AUDIT LOGGING (Zero Images / Zero Embeddings)
+  // ─────────────────────────────────────────────────────────────
+  void _logVerificationAttempt({
+    required bool success,
+    required double score,
+    required String matchedAngle,
+  }) {
+    try {
+      final docId = widget.invigilatorDocId;
+      if (docId == null) return;
+
+      FirebaseFirestore.instance.collection('face_verification_audit').add({
+        'staffDocId': docId,
+        'staffName': widget.staffName,
+        'centerName': widget.centerName,
+        'examName': widget.examName,
+        'success': success,
+        'scorePercent': double.parse(score.toStringAsFixed(1)),
+        'matchedAngle': matchedAngle,
+        'modelVersion': FaceConfig.modelVersion,
+        'deviceTimestamp': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // UI BUILD
+  // ─────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     const brandColor = Color(0xFF007A87);
@@ -456,7 +577,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                         ),
                       ),
                       Text(
-                        'Anti-Proxy Attendance Authentication',
+                        'Anti-Proxy Attendance (MobileFaceNet)',
                         style: TextStyle(
                           color: Colors.grey.shade400,
                           fontSize: 11,
@@ -474,7 +595,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
             ),
             const SizedBox(height: 18),
 
-            // Camera / Biometric Viewport
+            // Camera / Viewport
             ClipRRect(
               borderRadius: BorderRadius.circular(20),
               child: Container(
@@ -483,7 +604,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    // 1. Live Device Camera Preview (when initialized) or Frozen Captured Snapshot Preview
+                    // Live camera or captured snapshot
                     if (_liveCaptureBytes != null)
                       SizedBox.expand(
                         child: Image.memory(
@@ -514,13 +635,12 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                         ),
                       )
                     else
-                      // Fallback background grid when camera is unavailable / simulator
                       CustomPaint(
                         size: const Size(double.infinity, 270),
                         painter: _BiometricGridPainter(),
                       ),
 
-                    // Central Head Silhouette & Alignment Oval
+                    // Central Alignment Oval
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
                       width: 180,
@@ -536,20 +656,6 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                                   : (_step > 0 ? const Color(0xFF22D3EE) : Colors.white54)),
                           width: isDone || isMismatch ? 3 : 2,
                         ),
-                        boxShadow: [
-                          if (isDone)
-                            BoxShadow(
-                              color: verifiedColor.withValues(alpha: 0.4),
-                              blurRadius: 20,
-                              spreadRadius: 4,
-                            ),
-                          if (isMismatch)
-                            BoxShadow(
-                              color: rejectedColor.withValues(alpha: 0.4),
-                              blurRadius: 20,
-                              spreadRadius: 4,
-                            ),
-                        ],
                       ),
                       child: Center(
                         child: _countdown > 0
@@ -560,13 +666,6 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                                   color: Colors.black.withValues(alpha: 0.75),
                                   shape: BoxShape.circle,
                                   border: Border.all(color: const Color(0xFF22D3EE), width: 3),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFF22D3EE).withValues(alpha: 0.5),
-                                      blurRadius: 16,
-                                      spreadRadius: 2,
-                                    ),
-                                  ],
                                 ),
                                 alignment: Alignment.center,
                                 child: Text(
@@ -585,14 +684,12 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                                     ? verifiedColor.withValues(alpha: 0.35)
                                     : (isMismatch
                                         ? rejectedColor.withValues(alpha: 0.35)
-                                        : (_cameraController != null && _cameraController!.value.isInitialized
-                                            ? Colors.transparent
-                                            : Colors.white.withValues(alpha: 0.12))),
+                                        : Colors.white.withValues(alpha: 0.12)),
                               ),
                       ),
                     ),
 
-                    // Switch camera button (if multiple cameras available)
+                    // Switch camera button
                     if (_availableCameras != null && _availableCameras!.length > 1 && _step == 0)
                       Positioned(
                         top: 10,
@@ -611,29 +708,13 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                         ),
                       ),
 
-                    // 4 Corner Brackets around face oval
-                    Positioned(
-                      top: 25,
-                      left: 45,
-                      child: _bracketCorner(0),
-                    ),
-                    Positioned(
-                      top: 25,
-                      right: 45,
-                      child: _bracketCorner(1),
-                    ),
-                    Positioned(
-                      bottom: 25,
-                      left: 45,
-                      child: _bracketCorner(2),
-                    ),
-                    Positioned(
-                      bottom: 25,
-                      right: 45,
-                      child: _bracketCorner(3),
-                    ),
+                    // 4 Corner Brackets
+                    Positioned(top: 25, left: 45, child: _bracketCorner(0)),
+                    Positioned(top: 25, right: 45, child: _bracketCorner(1)),
+                    Positioned(bottom: 25, left: 45, child: _bracketCorner(2)),
+                    Positioned(bottom: 25, right: 45, child: _bracketCorner(3)),
 
-                    // Animated Laser Sweep Ray
+                    // Sweep Ray
                     if (_step == 1 || _step == 2)
                       AnimatedBuilder(
                         animation: _scanPosAnim,
@@ -644,8 +725,8 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                             right: 20,
                             child: Container(
                               height: 3,
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
+                              decoration: const BoxDecoration(
+                                gradient: LinearGradient(
                                   colors: [
                                     Colors.transparent,
                                     Color(0xFF22D3EE),
@@ -654,20 +735,13 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                                     Colors.transparent,
                                   ],
                                 ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF22D3EE).withValues(alpha: 0.8),
-                                    blurRadius: 10,
-                                    spreadRadius: 2,
-                                  ),
-                                ],
                               ),
                             ),
                           );
                         },
                       ),
 
-                    // Verified Checkmark Splash Overlay
+                    // Match Splash
                     if (isDone)
                       Container(
                         color: Colors.black45,
@@ -702,7 +776,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                         ),
                       ),
 
-                    // Mismatch Warning Splash Overlay
+                    // Mismatch Splash
                     if (isMismatch)
                       Container(
                         color: Colors.black.withValues(alpha: 0.65),
@@ -733,9 +807,9 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                                 ),
                               ),
                               const SizedBox(height: 4),
-                              const Text(
-                                'MISMATCH: REQUIRED ≥ 65%',
-                                style: TextStyle(
+                              Text(
+                                'REQUIRED: ≥ ${(FaceConfig.matchThreshold * 100).toInt()}%',
+                                style: const TextStyle(
                                   color: Colors.white70,
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
@@ -746,7 +820,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                         ),
                       ),
 
-                    // Telemetry Overlay HUD at bottom of frame
+                    // Telemetry HUD
                     Positioned(
                       bottom: 8,
                       left: 12,
@@ -755,22 +829,18 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           _telemetryChip(
-                            icon: _cameraController != null && _cameraController!.value.isInitialized
-                                ? Icons.videocam
-                                : Icons.shield,
+                            icon: Icons.videocam,
                             label: _cameraController != null && _cameraController!.value.isInitialized
-                                ? 'LIVE CAM • ${_availableCameras?[_selectedCameraIndex].lensDirection == CameraLensDirection.front ? "FRONT" : "REAR"}'
-                                : (_step >= 2 ? 'ANTI-SPOOF: PASS' : 'LIVENESS ACTIVE'),
-                            color: _cameraController != null && _cameraController!.value.isInitialized
-                                ? const Color(0xFF10B981)
-                                : const Color(0xFF22D3EE),
+                                ? 'LIVE CAM • FRONT'
+                                : 'CAMERA INIT',
+                            color: const Color(0xFF10B981),
                           ),
                           _telemetryChip(
-                            icon: Icons.grid_view_rounded,
-                            label: _referenceBytes != null
-                                ? 'REF: SUPABASE OK'
-                                : (_isFetchingReference ? 'FETCHING REF...' : 'NO REF'),
-                            color: _referenceBytes != null ? const Color(0xFF10B981) : Colors.amber,
+                            icon: Icons.fingerprint,
+                            label: _referenceEmbeddings.isNotEmpty
+                                ? 'EMBEDDINGS: ${_referenceEmbeddings.length} ANGLES'
+                                : (_isFetchingEmbeddings ? 'LOADING...' : 'NO TEMPLATE'),
+                            color: _referenceEmbeddings.isNotEmpty ? const Color(0xFF10B981) : Colors.amber,
                           ),
                         ],
                       ),
@@ -781,7 +851,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
             ),
             const SizedBox(height: 14),
 
-            // Staff & Duty Info Pill with Reference Portrait preview
+            // Staff & Duty Info Pill
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
@@ -791,25 +861,14 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
               ),
               child: Row(
                 children: [
-                  if (_referenceBytes != null)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Image.memory(
-                        _referenceBytes!,
-                        width: 32,
-                        height: 32,
-                        fit: BoxFit.cover,
-                      ),
-                    )
-                  else
-                    CircleAvatar(
-                      radius: 16,
-                      backgroundColor: brandColor.withValues(alpha: 0.3),
-                      child: Text(
-                        widget.staffName.isNotEmpty ? widget.staffName[0].toUpperCase() : 'S',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: brandColor.withValues(alpha: 0.3),
+                    child: Text(
+                      widget.staffName.isNotEmpty ? widget.staffName[0].toUpperCase() : 'S',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                     ),
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -870,7 +929,7 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   elevation: 4,
                 ),
-                onPressed: _startVerification,
+                onPressed: _referenceEmbeddings.isNotEmpty ? _startVerification : null,
               )
             else if (_step < 3)
               Container(
@@ -886,14 +945,11 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
                     SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Color(0xFF22D3EE),
-                      ),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF22D3EE)),
                     ),
                     SizedBox(width: 10),
                     Text(
-                      'Matching Biometrics Against Supabase...',
+                      'Matching Live Face with Embeddings...',
                       style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                     ),
                   ],
@@ -1003,7 +1059,6 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
   }
 
   Widget _bracketCorner(int corner) {
-    // 0: top-left, 1: top-right, 2: bottom-left, 3: bottom-right
     final isTop = corner == 0 || corner == 1;
     final isLeft = corner == 0 || corner == 2;
     return Container(

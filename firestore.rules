@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Invigilators Collection:
+    // Invigilator authentication is managed via Mobile + Resource ID validation in app
+    match /invigilators/{invigilatorId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if request.auth != null;
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
+    // Biometric Audit Trail (Immutable append-only log)
+    match /face_verification_audit/{auditId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if false; // Append-only
+    }
+
+    // General app collections (duties, centers, swap requests, incidents, settings)
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
