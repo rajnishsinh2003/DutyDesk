@@ -2594,6 +2594,96 @@ abstract class S {
   /// In en, this message translates to:
   /// **'Incident Logs'**
   String get incidentLogs;
+
+  /// No description provided for @chatbotTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'DutyDesk AI Assistant'**
+  String get chatbotTitle;
+
+  /// No description provided for @chatbotAskHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask a question...'**
+  String get chatbotAskHint;
+
+  /// No description provided for @chatbotSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get chatbotSend;
+
+  /// No description provided for @chatbotClearChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear chat'**
+  String get chatbotClearChat;
+
+  /// No description provided for @chatbotTyping.
+  ///
+  /// In en, this message translates to:
+  /// **'Thinking...'**
+  String get chatbotTyping;
+
+  /// No description provided for @chatbotConsentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy & AI Notice'**
+  String get chatbotConsentTitle;
+
+  /// No description provided for @chatbotConsentBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Your questions are processed by DutyDesk AI using official examination documents. Do not share sensitive personal passwords or IDs. Chat logs help improve support.'**
+  String get chatbotConsentBody;
+
+  /// No description provided for @chatbotConsentAccept.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept & Start Chat'**
+  String get chatbotConsentAccept;
+
+  /// No description provided for @chatbotSources.
+  ///
+  /// In en, this message translates to:
+  /// **'Sources'**
+  String get chatbotSources;
+
+  /// No description provided for @chatbotHelpful.
+  ///
+  /// In en, this message translates to:
+  /// **'Was this helpful?'**
+  String get chatbotHelpful;
+
+  /// No description provided for @chatbotFeedbackThanks.
+  ///
+  /// In en, this message translates to:
+  /// **'Thanks for your feedback!'**
+  String get chatbotFeedbackThanks;
+
+  /// No description provided for @chatbotFeedbackCommentHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional comment (what was missing?)'**
+  String get chatbotFeedbackCommentHint;
+
+  /// No description provided for @chatbotNeedMoreHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Need human assistance? Contact Support:'**
+  String get chatbotNeedMoreHelp;
+
+  /// No description provided for @chatbotOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'You appear to be offline. Please check your connection.'**
+  String get chatbotOffline;
+
+  /// No description provided for @chatbotStudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Chatbot Studio'**
+  String get chatbotStudio;
 }
 
 class _SDelegate extends LocalizationsDelegate<S> {

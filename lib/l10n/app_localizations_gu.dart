@@ -1301,4 +1301,53 @@ class SGu extends S {
 
   @override
   String get incidentLogs => 'ઘટના લૉગ્સ';
+
+  @override
+  String get chatbotTitle => 'DutyDesk AI સહાયક';
+
+  @override
+  String get chatbotAskHint => 'તમારો પ્રશ્ન પૂછો...';
+
+  @override
+  String get chatbotSend => 'મોકલો';
+
+  @override
+  String get chatbotClearChat => 'ચેટ સાફ કરો';
+
+  @override
+  String get chatbotTyping => 'વિચારી રહ્યું છે...';
+
+  @override
+  String get chatbotConsentTitle => 'ગોપનીયતા અને AI સૂચના';
+
+  @override
+  String get chatbotConsentBody =>
+      'તમારા પ્રશ્નોના જવાબ સત્તાવાર પરીક્ષા દસ્તાવેજોના આધારે DutyDesk AI દ્વારા આપવામાં આવે છે. કૃપા કરીને પાસવર્ડ કે અંગત ID શેર કરશો નહીં.';
+
+  @override
+  String get chatbotConsentAccept => 'સ્વીકારો અને ચેટ શરૂ કરો';
+
+  @override
+  String get chatbotSources => 'સ્ત્રોતો';
+
+  @override
+  String get chatbotHelpful => 'શું આ જવાબ મદદરૂપ હતો?';
+
+  @override
+  String get chatbotFeedbackThanks => 'તમારા પ્રતિસાદ બદલ આભાર!';
+
+  @override
+  String get chatbotFeedbackCommentHint =>
+      'વૈકલ્પિક ટિપ્પણી (શું ખૂટતું હતું?)';
+
+  @override
+  String get chatbotNeedMoreHelp =>
+      'માનવ સહાયની જરૂર છે? કંટ્રોલ રૂમનો સંપર્ક કરો:';
+
+  @override
+  String get chatbotOffline =>
+      'તમે ઓફલાઇન લાગો છો. કૃપા કરીને ઇન્ટરનેટ કનેક્શન તપાસો.';
+
+  @override
+  String get chatbotStudio => 'ચેટબોટ સ્ટુડિયો';
 }

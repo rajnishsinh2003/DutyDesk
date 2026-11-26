@@ -567,5 +567,20 @@
   "standbyReplacement": "Standby Replacement",
   "incidentReport": "Incident Report",
   "reportExamIncident": "Report Exam Incident",
-  "incidentLogs": "Incident Logs"
+  "incidentLogs": "Incident Logs",
+  "chatbotTitle": "DutyDesk AI Assistant",
+  "chatbotAskHint": "Ask a question...",
+  "chatbotSend": "Send",
+  "chatbotClearChat": "Clear chat",
+  "chatbotTyping": "Thinking...",
+  "chatbotConsentTitle": "Privacy & AI Notice",
+  "chatbotConsentBody": "Your questions are processed by DutyDesk AI using official examination documents. Do not share sensitive personal passwords or IDs. Chat logs help improve support.",
+  "chatbotConsentAccept": "Accept & Start Chat",
+  "chatbotSources": "Sources",
+  "chatbotHelpful": "Was this helpful?",
+  "chatbotFeedbackThanks": "Thanks for your feedback!",
+  "chatbotFeedbackCommentHint": "Optional comment (what was missing?)",
+  "chatbotNeedMoreHelp": "Need human assistance? Contact Support:",
+  "chatbotOffline": "You appear to be offline. Please check your connection.",
+  "chatbotStudio": "Chatbot Studio"
 }

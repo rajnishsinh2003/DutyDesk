@@ -43,3 +43,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Secrets & Node dependencies
+service-account.json
+*service-account*.json
+.env
+.env.*
+functions/node_modules/
+functions/lib/
+supabase/.temp/

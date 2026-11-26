@@ -445,5 +445,20 @@
   "standbyReplacement": "સ્ટેન્ડબાય બદલી",
   "incidentReport": "ઘટના અહેવાલ",
   "reportExamIncident": "પરીક્ષા ઘટના નોંધો",
-  "incidentLogs": "ઘટના લૉગ્સ"
+  "incidentLogs": "ઘટના લૉગ્સ",
+  "chatbotTitle": "DutyDesk AI સહાયક",
+  "chatbotAskHint": "તમારો પ્રશ્ન પૂછો...",
+  "chatbotSend": "મોકલો",
+  "chatbotClearChat": "ચેટ સાફ કરો",
+  "chatbotTyping": "વિચારી રહ્યું છે...",
+  "chatbotConsentTitle": "ગોપનીયતા અને AI સૂચના",
+  "chatbotConsentBody": "તમારા પ્રશ્નોના જવાબ સત્તાવાર પરીક્ષા દસ્તાવેજોના આધારે DutyDesk AI દ્વારા આપવામાં આવે છે. કૃપા કરીને પાસવર્ડ કે અંગત ID શેર કરશો નહીં.",
+  "chatbotConsentAccept": "સ્વીકારો અને ચેટ શરૂ કરો",
+  "chatbotSources": "સ્ત્રોતો",
+  "chatbotHelpful": "શું આ જવાબ મદદરૂપ હતો?",
+  "chatbotFeedbackThanks": "તમારા પ્રતિસાદ બદલ આભાર!",
+  "chatbotFeedbackCommentHint": "વૈકલ્પિક ટિપ્પણી (શું ખૂટતું હતું?)",
+  "chatbotNeedMoreHelp": "માનવ સહાયની જરૂર છે? કંટ્રોલ રૂમનો સંપર્ક કરો:",
+  "chatbotOffline": "તમે ઓફલાઇન લાગો છો. કૃપા કરીને ઇન્ટરનેટ કનેક્શન તપાસો.",
+  "chatbotStudio": "ચેટબોટ સ્ટુડિયો"
 }

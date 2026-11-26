@@ -2,12 +2,30 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Invigilators Collection:
-    // Invigilator authentication is managed via Mobile + Resource ID validation in app
+    // -------------------------------------------------------------------------
+    // Helper Functions
+    // -------------------------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    function isAuditor() {
+      return isSignedIn() && request.auth.token.auditor == true;
+    }
+
+    // =========================================================================
+    // EXISTING DUTYDESK COLLECTIONS (Explicitly matched; no catch-all)
+    // =========================================================================
+
+    // Invigilators Collection (Auth via Mobile + Resource ID in app)
     match /invigilators/{invigilatorId} {
       allow read: if true;
       allow create, update: if true;
-      allow delete: if request.auth != null;
+      allow delete: if isSignedIn();
     }
 
     // Users Collection
@@ -19,12 +37,125 @@ service cloud.firestore {
     match /face_verification_audit/{auditId} {
       allow read: if true;
       allow create: if true;
-      allow update, delete: if false; // Append-only
+      allow update, delete: if false;
     }
 
-    // General app collections (duties, centers, swap requests, incidents, settings)
-    match /{document=**} {
+    match /duties/{dutyId} {
       allow read, write: if true;
+    }
+
+    match /centers/{centerId} {
+      allow read, write: if true;
+    }
+
+    match /exam_sessions/{sessionId} {
+      allow read, write: if true;
+    }
+
+    match /swap_requests/{swapId} {
+      allow read, write: if true;
+    }
+
+    match /notifications/{notifId} {
+      allow read, write: if true;
+    }
+
+    match /incidents/{incidentId} {
+      allow read, write: if true;
+    }
+
+    match /settings/{settingId} {
+      allow read, write: if true;
+    }
+
+    match /audit_trail/{eventId} {
+      allow read, write: if true;
+    }
+
+    match /question_paper_packets/{packetId} {
+      allow read, write: if true;
+    }
+
+    match /answer_sheet_bundles/{bundleId} {
+      allow read, write: if true;
+    }
+
+    match /seating_plans/{planId} {
+      allow read, write: if true;
+    }
+
+    match /daily_records/{recordId} {
+      allow read, write: if true;
+    }
+
+    match /password_reset_otps/{docId} {
+      allow read, write: if true;
+    }
+
+    // =========================================================================
+    // AI CHATBOT COLLECTIONS (Strict RBAC + Function-only writes)
+    // =========================================================================
+
+    // Chatbot global configuration: readable by any client, writable only by Admin
+    match /chatbot_settings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Knowledge base document metadata: Admin only
+    match /chatbot_documents/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Vector chunks: Written ONLY by Cloud Functions (Admin SDK). Admins may read.
+    match /chatbot_chunks/{chunkId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Approved FAQs: Admin can read and manage metadata; embeddings written by Functions
+    match /chatbot_faqs/{faqId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Chat sessions:
+    // - Admin: full read (mutations go through functions)
+    // - Auditor: read-only
+    // - Visitor / Invigilator: read only their own session (ownerUid == request.auth.uid)
+    match /chatbot_sessions/{sessionId} {
+      allow read: if isAdmin() || isAuditor() || (isSignedIn() && resource.data.ownerUid == request.auth.uid);
+      allow create, update: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid && !('flagged' in request.resource.data.diff(resource != null ? resource.data : {}).affectedKeys());
+      allow delete: if isAdmin();
+
+      // Messages subcollection: written ONLY by Cloud Functions
+      match /messages/{messageId} {
+        allow read: if isAdmin() || isAuditor() || (isSignedIn() && get(/databases/$(database)/documents/chatbot_sessions/$(sessionId)).data.ownerUid == request.auth.uid);
+        allow write: if false;
+      }
+    }
+
+    // Unanswered queue: Admin read only (resolved via Cloud Function)
+    match /chatbot_unanswered/{itemId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Daily aggregated stats: Admin read only, written ONLY by Cloud Functions
+    match /chatbot_stats_daily/{dateKey} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Chatbot Admin Audit Log: Admin read only, written ONLY by Cloud Functions
+    match /chatbot_audit/{auditId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Default deny everything else
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

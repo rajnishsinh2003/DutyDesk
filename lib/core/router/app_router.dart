@@ -35,6 +35,7 @@ import '../../features/audit_trail/presentation/audit_trail_screen.dart';
 import '../../features/roles/presentation/role_based_dashboard_screen.dart';
 import '../../features/cctv/presentation/cctv_monitor_screen.dart';
 import '../../features/portal/presentation/student_portal_screen.dart';
+import '../../features/chatbot/presentation/admin/chatbot_studio_screen.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: kIsWeb ? '/' : '/splash',
@@ -209,6 +210,10 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: 'student_portal',
           builder: (context, state) => const StudentPortalScreen(),
+        ),
+        GoRoute(
+          path: 'chatbot',
+          builder: (context, state) => const ChatbotStudioScreen(),
         ),
       ],
     ),

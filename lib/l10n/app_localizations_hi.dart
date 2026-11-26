@@ -1299,4 +1299,52 @@ class SHi extends S {
 
   @override
   String get incidentLogs => 'घटना लॉग';
+
+  @override
+  String get chatbotTitle => 'DutyDesk AI सहायक';
+
+  @override
+  String get chatbotAskHint => 'अपना प्रश्न पूछें...';
+
+  @override
+  String get chatbotSend => 'भेजें';
+
+  @override
+  String get chatbotClearChat => 'चैट साफ़ करें';
+
+  @override
+  String get chatbotTyping => 'सोच रहा है...';
+
+  @override
+  String get chatbotConsentTitle => 'गोपनीयता एवं AI सूचना';
+
+  @override
+  String get chatbotConsentBody =>
+      'आपके प्रश्नों का उत्तर आधिकारिक परीक्षा दस्तावेज़ों के आधार पर DutyDesk AI द्वारा दिया जाता है। कृपया संवेदनशील पासवर्ड या निजी ID साझा न करें।';
+
+  @override
+  String get chatbotConsentAccept => 'स्वीकार करें और चैट शुरू करें';
+
+  @override
+  String get chatbotSources => 'स्रोत';
+
+  @override
+  String get chatbotHelpful => 'क्या यह उत्तर उपयोगी था?';
+
+  @override
+  String get chatbotFeedbackThanks => 'आपकी प्रतिक्रिया के लिए धन्यवाद!';
+
+  @override
+  String get chatbotFeedbackCommentHint => 'वैकल्पिक टिप्पणी (क्या कमी थी?)';
+
+  @override
+  String get chatbotNeedMoreHelp =>
+      'मानव सहायता चाहिए? नियंत्रण कक्ष से संपर्क करें:';
+
+  @override
+  String get chatbotOffline =>
+      'आप ऑफ़लाइन प्रतीत होते हैं। कृपया इंटरनेट कनेक्शन जाँचें।';
+
+  @override
+  String get chatbotStudio => 'चैटबॉट स्टूडियो';
 }

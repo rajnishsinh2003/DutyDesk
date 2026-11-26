@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:duty_desk/l10n/app_localizations.dart';
 import 'core/theme/app_theme.dart';
@@ -40,8 +41,21 @@ void main() async {
     }
   }
 
-  // 🔔 Initialize FCM Push Notifications
+  // 🔔 Initialize FCM Push Notifications & Firebase App Check
   if (Firebase.apps.isNotEmpty) {
+    try {
+      const recaptchaKey = String.fromEnvironment('RECAPTCHA_V3_SITE_KEY');
+      await FirebaseAppCheck.instance.activate(
+        providerWeb: recaptchaKey.isNotEmpty
+            ? ReCaptchaV3Provider(recaptchaKey)
+            : null,
+        providerAndroid: kDebugMode
+            ? const AndroidDebugProvider()
+            : const AndroidPlayIntegrityProvider(),
+      );
+    } catch (e) {
+      debugPrint("App Check initialization skipped/failed: $e");
+    }
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     await FcmPushService.initialize();
   }

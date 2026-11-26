@@ -306,13 +306,58 @@ class AuthNotifier extends Notifier<AuthState> {
         final querySnapshot = await FirebaseFirestore.instance
             .collection('invigilators')
             .where('mobile', isEqualTo: cleanMobile)
-            .where('resourceId', isEqualTo: cleanPassword)
-            .limit(1)
             .get();
 
-        if (querySnapshot.docs.isNotEmpty) {
-          final doc = querySnapshot.docs.first;
-          final name = doc.data()['name'] ?? 'Invigilator';
+        DocumentSnapshot<Map<String, dynamic>>? matchedDoc;
+        for (final doc in querySnapshot.docs) {
+          final data = doc.data();
+          final customPassword = data['password']?.toString().trim();
+          final resourceId = data['resourceId']?.toString().trim();
+
+          // 1. If staff set a custom password, verify against it
+          if (customPassword != null && customPassword.isNotEmpty) {
+            if (customPassword == cleanPassword) {
+              matchedDoc = doc;
+              break;
+            }
+          }
+          // 2. If no custom password set yet (or user uses resourceId), verify against admin-assigned resourceId
+          if (resourceId != null && resourceId.isNotEmpty) {
+            if (resourceId == cleanPassword) {
+              matchedDoc = doc;
+              break;
+            }
+          }
+        }
+
+        // Fallback: check if staff entered their Resource ID in the mobile/identifier field
+        if (matchedDoc == null) {
+          final byResource = await FirebaseFirestore.instance
+              .collection('invigilators')
+              .where('resourceId', isEqualTo: cleanMobile)
+              .get();
+          for (final doc in byResource.docs) {
+            final data = doc.data();
+            final customPassword = data['password']?.toString().trim();
+            final resourceId = data['resourceId']?.toString().trim();
+            if (customPassword != null && customPassword.isNotEmpty) {
+              if (customPassword == cleanPassword) {
+                matchedDoc = doc;
+                break;
+              }
+            }
+            if (resourceId != null && resourceId.isNotEmpty) {
+              if (resourceId == cleanPassword) {
+                matchedDoc = doc;
+                break;
+              }
+            }
+          }
+        }
+
+        if (matchedDoc != null) {
+          final doc = matchedDoc;
+          final name = doc.data()?['name'] ?? 'Invigilator';
           state = state.copyWith(
             isLoading: false,
             role: UserRole.invigilator,
@@ -332,7 +377,7 @@ class AuthNotifier extends Notifier<AuthState> {
           }
           state = state.copyWith(
             isLoading: false,
-            error: 'Invalid Mobile Number or Resource ID. If you are an Admin, switch to the Administrator tab.',
+            error: 'Invalid Mobile Number or Password. If you are an Admin, switch to the Administrator tab.',
           );
         }
       } catch (e) {

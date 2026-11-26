@@ -23,6 +23,7 @@ import 'face_verification_dialog.dart';
 import 'digital_gate_pass_dialog.dart';
 import '../../face_verification/presentation/multi_angle_face_enrollment_dialog.dart';
 import '../../../core/services/ble_beacon_service.dart';
+import '../../chatbot/presentation/widget/chatbot_launcher.dart';
 
 class InvigilatorDashboardScreen extends ConsumerStatefulWidget {
   const InvigilatorDashboardScreen({super.key});
@@ -471,14 +472,14 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
+        title: const Row(
           children: [
-            const Icon(Icons.radar, color: Colors.orange, size: 28),
-            const SizedBox(width: 8),
+            Icon(Icons.radar_rounded, color: Colors.orange, size: 28),
+            SizedBox(width: 8),
             Expanded(
               child: Text(
-                s.outsideCenter,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orange),
+                'Outside 200m Center Radius',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.orange),
               ),
             ),
           ],
@@ -488,16 +489,16 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${s.outsideGeofenceWarning} ($centerName).',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              'Biometric face verification only opens when you are within the 200-meter radius of $centerName.',
+              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, height: 1.4),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: Colors.orange.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.orange.shade300, width: 0.8),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange.shade300, width: 1),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -505,41 +506,44 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('${s.distanceFromCenter}:', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                      Text(geofence.formattedDistance, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.deepOrange)),
+                      const Text('Your Current Distance:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      Text(
+                        geofence.formattedDistance,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.deepOrange),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Row(
+                  const SizedBox(height: 6),
+                  const Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('${s.allowedArrivalRadius}:', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                      Text('${geofence.allowedRadiusMeters} m', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text('Required Radius:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      Text(
+                        'Within 200 meters',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF15803D)),
+                      ),
                     ],
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 12),
-            Text(
-              s.outsideGeofenceWarning,
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            const Text(
+              'Please reach within 200m of the exam center building and tap "I Have Reached Center" to verify your face and clock in.',
+              style: TextStyle(fontSize: 12, color: Colors.grey, height: 1.35),
             ),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false), // Try again
-            child: Text(s.tryAgain),
-          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange.shade800,
+              backgroundColor: const Color(0xFF007A87),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             ),
-            onPressed: () => Navigator.pop(ctx, true), // Request manual verification
-            child: Text(s.requestManualVerification, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('OK, Understood', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -1045,19 +1049,24 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                     ],
                   ),
                   if (result.distanceFromCenter != null) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('${s.distanceFromCenter}:', style: const TextStyle(color: Colors.grey, fontSize: 13)),
-                        Text(
-                          result.distanceFromCenter! < 1000
-                              ? s.distanceMeters(result.distanceFromCenter!.toStringAsFixed(0))
-                              : '${(result.distanceFromCenter! / 1000).toStringAsFixed(2)} km',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                            color: result.isGeofenceVerified == true ? Colors.green : Colors.orange,
+                        const SizedBox(width: 12),
+                        Flexible(
+                          child: Text(
+                            result.distanceFromCenter! < 1000
+                                ? s.distanceMeters(result.distanceFromCenter!.toStringAsFixed(0))
+                                : '${(result.distanceFromCenter! / 1000).toStringAsFixed(2)} km',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: result.isGeofenceVerified == true ? Colors.green : Colors.orange,
+                            ),
                           ),
                         ),
                       ],
@@ -1117,7 +1126,7 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: () => Navigator.pop(ctx),
-                child: Text(s.save, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                child: const Text('Done', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -1221,6 +1230,11 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
         ],
       ),
       body: _buildTabContent(currentInv, duties, invs, dutySettings, s),
+      floatingActionButton: ChatbotLauncher(
+        surface: 'invigilator',
+        userId: currentInv.id,
+        userName: currentInv.name,
+      ),
       bottomNavigationBar: Container(
         height: 72,
         decoration: BoxDecoration(
@@ -1315,19 +1329,54 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
   // ---------------------------------------------------------------------------
   // 1. TAB: DUTIES (ACTIVE / PENDING / REACHED TRACKING)
   // ---------------------------------------------------------------------------
-  Widget _buildDutiesTab(List<ExamDuty> duties, List<Invigilator> allInvs, Invigilator currentInv, DutySettings dutySettings, S s) {
-    final activeDuties = duties.where((d) => d.status.toLowerCase() != 'rejected').toList();
-    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+  String _getRelativeDateBadge(String dateStr) {
+    final dt = DateTime.tryParse(dateStr);
+    if (dt == null) return dateStr;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(dt.year, dt.month, dt.day);
+    final diffDays = target.difference(today).inDays;
 
-    // Calculate total amount
+    if (diffDays == 0) return 'Today';
+    if (diffDays == 1) return 'Tomorrow';
+    if (diffDays > 1) return 'In $diffDays days';
+    if (diffDays == -1) return 'Yesterday';
+    return '${diffDays.abs()} days ago';
+  }
+
+  Widget _buildDutiesTab(List<ExamDuty> duties, List<Invigilator> allInvs, Invigilator currentInv, DutySettings dutySettings, S s) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final todayStr = DateFormat('yyyy-MM-dd').format(today);
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    // 1. Filter Today's Duties (date == today, not rejected)
+    final todaysDutyList = duties.where((d) => d.date == todayStr && d.status.toLowerCase() != 'rejected').toList();
+
+    // 2. Filter Upcoming Duties (date in future, not rejected, sorted ascending)
+    final upcomingDuties = duties.where((d) {
+      if (d.status.toLowerCase() == 'rejected') return false;
+      final dt = DateTime.tryParse(d.date);
+      if (dt == null) return false;
+      final dutyDay = DateTime(dt.year, dt.month, dt.day);
+      return dutyDay.isAfter(today);
+    }).toList()..sort((a, b) => (DateTime.tryParse(a.date) ?? today).compareTo(DateTime.tryParse(b.date) ?? today));
+
+    // 3. Filter Action Missed / Unresponded Duties (date in past and status is pending)
+    final unrespondedDuties = duties.where((d) {
+      if (d.status.toLowerCase() != 'pending') return false;
+      final dt = DateTime.tryParse(d.date);
+      if (dt == null) return false;
+      final dutyDay = DateTime(dt.year, dt.month, dt.day);
+      return dutyDay.isBefore(today);
+    }).toList()..sort((a, b) => (DateTime.tryParse(b.date) ?? today).compareTo(DateTime.tryParse(a.date) ?? today));
+
+    // Calculate total amount for active (today + upcoming) duties
+    final activeDuties = [...todaysDutyList, ...upcomingDuties];
     int totalDutyAmount = 0;
     for (final d in activeDuties) {
       totalDutyAmount += d.parsedPaymentAmount;
     }
-
-    // Filter today's duty
-    final todaysDutyList = activeDuties.where((d) => d.date == todayStr).toList();
-    final otherUpcomingDuties = activeDuties.where((d) => d.date != todayStr).toList();
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -1335,9 +1384,9 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 1. SUMMARY HERO CARD (Total Duties & Total Amount)
+          // 1. SUMMARY HERO CARD (Clean responsive header, Total Duties & Remuneration)
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [Color(0xFF007A87), Color(0xFF005B66)],
@@ -1357,61 +1406,94 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${s.welcome}, ${currentInv.name}', // COMPLETE STAFF NAME
-                          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          '${s.resourceId}: ${currentInv.resourceId}',
-                          style: const TextStyle(color: Colors.white70, fontSize: 12),
-                        ),
-                      ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${s.welcome}, ${currentInv.name}',
+                            style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold, height: 1.25),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 5),
+                          Row(
+                            children: [
+                              Text(
+                                '${s.resourceId}: ${currentInv.resourceId}',
+                                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.22),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  s.staff.toUpperCase(),
+                                  style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                    Row(
-                      children: [
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.report_problem_rounded, size: 14, color: Colors.white),
-                          label: const Text('Incident', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFDC2626),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            visualDensity: VisualDensity.compact,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          onPressed: () => _showReportIncidentDialog(
-                            context,
-                            duty: todaysDutyList.isNotEmpty ? todaysDutyList.first : (activeDuties.isNotEmpty ? activeDuties.first : null),
-                            currentInv: currentInv,
-                          ),
+                    const SizedBox(width: 10),
+                    // Quick Incident Report Action
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => _showReportIncidentDialog(
+                          context,
+                          duty: todaysDutyList.isNotEmpty
+                              ? todaysDutyList.first
+                              : (activeDuties.isNotEmpty ? activeDuties.first : null),
+                          currentInv: currentInv,
                         ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(12),
+                            color: const Color(0xFFDC2626),
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                           ),
-                          child: Text(s.staff.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.warning_amber_rounded, size: 14, color: Colors.white),
+                              SizedBox(width: 4),
+                              Text(
+                                'Incident',
+                                style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
                         ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                const Divider(color: Colors.white24, height: 1),
                 const SizedBox(height: 14),
+                const Divider(color: Colors.white24, height: 1),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(s.totalDuties, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                          Text(s.totalDuties, style: const TextStyle(color: Colors.white70, fontSize: 11.5)),
                           const SizedBox(height: 2),
                           Text('${activeDuties.length}', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
                         ],
@@ -1421,12 +1503,31 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(s.totalRemuneration, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                          Text(s.totalRemuneration, style: const TextStyle(color: Colors.white70, fontSize: 11.5)),
                           const SizedBox(height: 2),
                           Text('₹$totalDutyAmount', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
+                    if (unrespondedDuties.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDC2626).withValues(alpha: 0.85),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.info_outline, size: 12, color: Colors.white),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${unrespondedDuties.length} Expired',
+                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
               ],
@@ -1577,55 +1678,305 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
             const SizedBox(height: 16),
           ],
 
-          // 2. TODAY'S DUTY SECTION (With REACHED Button & Arrival Evaluation)
-          if (todaysDutyList.isNotEmpty) ...[
-            Row(
-              children: [
-                const Icon(Icons.today, color: Color(0xFF007A87), size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  s.todaysDuties,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ],
+          // -----------------------------------------------------------------
+          // 2. UNRESPONDED / MISSED ACTION DUTIES (Date passed & not accepted/rejected)
+          // -----------------------------------------------------------------
+          if (unrespondedDuties.isNotEmpty) ...[
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: isDarkMode ? const Color(0xFF451A1A).withValues(alpha: 0.5) : const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFF87171), width: 1.2),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDC2626).withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 20),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  'Action Missed / Expired Duties',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13.5,
+                                    color: isDarkMode ? const Color(0xFFFCA5A5) : const Color(0xFF991B1B),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFDC2626),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    '${unrespondedDuties.length}',
+                                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Exam date has passed without your acceptance or rejection. Please dismiss or report.',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: isDarkMode ? Colors.red.shade200 : const Color(0xFFB91C1C),
+                                height: 1.3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  ...unrespondedDuties.map((d) => _buildUnrespondedDutyCard(d, s, currentInv)),
+                ],
+              ),
             ),
-            const SizedBox(height: 10),
-            ...todaysDutyList.map((d) => _buildTodayDutyCard(d, allInvs, dutySettings, s, currentInv)),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
           ],
 
-          // 3. UPCOMING / ALL ASSIGNED DUTIES
+          // -----------------------------------------------------------------
+          // 3. TODAY'S DUTY SECTION (With REACHED Button & Arrival Evaluation)
+          // -----------------------------------------------------------------
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                todaysDutyList.isNotEmpty ? s.upcomingDuties : s.assignedDuty,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              Row(
+                children: [
+                  const Icon(Icons.today, color: Color(0xFF007A87), size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    s.todaysDuties,
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                  ),
+                ],
               ),
-              Text(
-                '${activeDuties.length} ${s.dutyDetails}',
-                style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w600, fontSize: 13),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF007A87).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  DateFormat('EEE, d MMM').format(DateTime.now()),
+                  style: const TextStyle(color: Color(0xFF007A87), fontWeight: FontWeight.w600, fontSize: 11.5),
+                ),
               ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          if (todaysDutyList.isNotEmpty) ...[
+            ...todaysDutyList.map((d) => _buildTodayDutyCard(d, allInvs, dutySettings, s, currentInv)),
+          ] else ...[
+            // Clean Empty State for Today's Duties
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+              decoration: BoxDecoration(
+                color: isDarkMode ? const Color(0xFF1E293B) : Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: isDarkMode ? Colors.white10 : Colors.grey.shade200),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF007A87).withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.event_available_outlined, color: Color(0xFF007A87), size: 24),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'No Duties Scheduled for Today',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'You have no active exam allocations for today ($todayStr).',
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 24),
+
+          // -----------------------------------------------------------------
+          // 4. UPCOMING ASSIGNED DUTIES
+          // -----------------------------------------------------------------
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.upcoming_outlined, color: Color(0xFF007A87), size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    s.upcomingDuties,
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              if (upcomingDuties.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${upcomingDuties.length} ${upcomingDuties.length == 1 ? "Duty" : "Duties"}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 12),
 
-          if (activeDuties.isEmpty)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 40),
-                child: Column(
-                  children: [
-                    Icon(Icons.assignment_outlined, size: 56, color: Colors.grey.shade400),
-                    const SizedBox(height: 12),
-                    Text(s.noDutiesAssigned, style: const TextStyle(color: Colors.grey, fontSize: 15)),
-                  ],
-                ),
-              ),
-            )
+          if (upcomingDuties.isNotEmpty)
+            ...upcomingDuties.map((d) => _buildStandardDutyCard(d, allInvs, dutySettings, s, currentInv))
           else
-            ...otherUpcomingDuties.map((d) => _buildStandardDutyCard(d, allInvs, dutySettings, s, currentInv)),
+            // Clean Empty State for Upcoming Duties
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+              decoration: BoxDecoration(
+                color: isDarkMode ? const Color(0xFF1E293B) : Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: isDarkMode ? Colors.white10 : Colors.grey.shade200),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.calendar_month_outlined, size: 36, color: Colors.grey.shade400),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'No Upcoming Duties Available',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'You do not have any future duty allocations at this time.',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
         ],
+      ),
+    );
+  }
+
+  // Card for duties where the scheduled exam date has expired without acceptance or rejection
+  Widget _buildUnrespondedDutyCard(ExamDuty duty, S s, Invigilator currentInv) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final relDate = _getRelativeDateBadge(duty.date);
+
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 10),
+      color: isDark ? const Color(0xFF1E293B) : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.red.shade300, width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    duty.examName,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade100,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'EXPIRED',
+                    style: TextStyle(color: Colors.red.shade900, fontWeight: FontWeight.bold, fontSize: 9.5),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(Icons.calendar_today_outlined, size: 13, color: Colors.grey),
+                const SizedBox(width: 4),
+                Text(
+                  '${duty.date} ($relDate)',
+                  style: TextStyle(fontSize: 12, color: Colors.red.shade700, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(width: 10),
+                const Icon(Icons.location_on_outlined, size: 13, color: Colors.grey),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    duty.centerName,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text(
+                  'Shift ${duty.shift} • ₹${duty.payment}',
+                  style: const TextStyle(fontSize: 11.5, color: Colors.grey),
+                ),
+                const Spacer(),
+                OutlinedButton(
+                  onPressed: () => ref.read(dutyProvider.notifier).updateDutyStatus(duty.id, 'rejected'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red.shade800,
+                    side: BorderSide(color: Colors.red.shade300),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    visualDensity: VisualDensity.compact,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('Dismiss / Mark Missed', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1682,29 +2033,108 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
             _buildInfoRow(Icons.calendar_today, '${s.date}: ${duty.date} (${s.today})'),
             const SizedBox(height: 6),
             _buildInfoRow(Icons.location_on_outlined, '${s.center}: ${duty.centerName}'),
-            const SizedBox(height: 6),
-            _buildInfoRow(Icons.access_time, '${s.reportingTime}: ${duty.reportingTime}'),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                const SizedBox(width: 2),
-                Icon(Icons.star_rounded, size: 14, color: Colors.green.shade700),
-                const SizedBox(width: 6),
-                Text('Excellent Until: ${duty.excellentUntil}', style: TextStyle(fontSize: 13, color: Colors.green.shade700, fontWeight: FontWeight.w600)),
-                const SizedBox(width: 12),
-                Icon(Icons.thumb_up_alt_rounded, size: 14, color: Colors.orange.shade700),
-                const SizedBox(width: 6),
-                Text('Good Until: ${duty.goodUntil}', style: TextStyle(fontSize: 13, color: Colors.orange.shade700, fontWeight: FontWeight.w600)),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                const SizedBox(width: 2),
-                const Icon(Icons.timer_outlined, size: 14, color: Color(0xFF7C3AED)),
-                const SizedBox(width: 6),
-                Text('Exam Time: ${duty.dutyStartTime} - ${duty.dutyEndTime}', style: const TextStyle(fontSize: 13, color: Color(0xFF7C3AED), fontWeight: FontWeight.w600)),
-              ],
+            const SizedBox(height: 8),
+
+            // Responsive Timing Chips Container (Prevents mobile line overflows)
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white.withValues(alpha: 0.04)
+                    : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : const Color(0xFFE2E8F0),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.access_time_rounded, size: 15, color: Color(0xFF007A87)),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${s.reportingTime}: ',
+                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
+                      ),
+                      Text(
+                        duty.reportingTime.isNotEmpty ? duty.reportingTime : 'Not specified',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      if (duty.excellentUntil.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.green.shade400, width: 0.8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.star_rounded, size: 14, color: Colors.green.shade700),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Excellent: ${duty.excellentUntil}',
+                                style: TextStyle(fontSize: 11.5, color: Colors.green.shade800, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (duty.goodUntil.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange.shade400, width: 0.8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.thumb_up_alt_rounded, size: 13, color: Colors.orange.shade800),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Good: ${duty.goodUntil}',
+                                style: TextStyle(fontSize: 11.5, color: Colors.orange.shade900, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (duty.dutyStartTime.isNotEmpty || duty.dutyEndTime.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF7C3AED).withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF7C3AED).withValues(alpha: 0.25), width: 0.8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.timer_outlined, size: 13, color: Color(0xFF7C3AED)),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Exam: ${duty.dutyStartTime} - ${duty.dutyEndTime}',
+                                style: const TextStyle(fontSize: 11.5, color: Color(0xFF7C3AED), fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
             ),
             const Divider(height: 24),
             Row(
@@ -1864,34 +2294,29 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                       matchedCenter = centers.isNotEmpty ? centers.first : null;
                     }
 
-                    // Pre-check geofence if center coordinates are available
-                    bool isManualOverride = false;
+                    // 2. Strict Geofence Pre-check: Must be inside 200m radius of exam center before Face Verification opens
                     if (matchedCenter != null && matchedCenter.latitude != null && matchedCenter.longitude != null) {
                       final geofence = LocationService.verifyGeofence(
                         staffLat: loc.latitude!,
                         staffLng: loc.longitude!,
                         centerLat: matchedCenter.latitude,
                         centerLng: matchedCenter.longitude,
-                        allowedRadiusMeters: matchedCenter.allowedRadiusMeters,
+                        allowedRadiusMeters: 200,
                       );
 
                       if (!geofence.isVerified) {
                         if (!mounted) return;
-                        final requestManual = await _showOutsideGeofenceDialog(
+                        await _showOutsideGeofenceDialog(
                           context: context,
                           centerName: matchedCenter.name,
                           geofence: geofence,
                         );
-
-                        if (requestManual != true) {
-                          return; // User clicked "Try Again"
-                        }
-                        isManualOverride = true;
+                        return; // ⛔ Block: Face verification will ONLY open if inside 200m radius!
                       }
                     }
 
                     if (!mounted) return;
-                    // 3. Mandatory Biometric Face Verification (Anti-Proxy Attendance)
+                    // 3. Mandatory Biometric Face Verification (Opens ONLY when inside 200m radius)
                     final auth = ref.read(authProvider);
                     final allInvs = ref.read(invigilatorProvider);
                     Invigilator? matchedInv;
@@ -1933,8 +2358,8 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                           goodUntil: duty.goodUntil,
                           centerLat: matchedCenter?.latitude,
                           centerLng: matchedCenter?.longitude,
-                          allowedRadiusMeters: matchedCenter?.allowedRadiusMeters ?? 200,
-                          isManualOverride: isManualOverride,
+                          allowedRadiusMeters: 200,
+                          isManualOverride: false,
                           isFaceVerified: faceResult.isVerified,
                           faceMatchScore: faceResult.matchScore,
                         );
@@ -2000,11 +2425,18 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 5,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              Text('${s.status}: ', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                              Text(s.reached, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 13)),
-                              const SizedBox(width: 8),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text('${s.status}: ', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                  Text(s.reached, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 13)),
+                                ],
+                              ),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
@@ -2013,13 +2445,12 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                                 ),
                                 child: Text(
                                   duty.reachedPerformance ?? s.onTime,
-                                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                                  style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold),
                                 ),
                               ),
-                              if (duty.isFaceVerified) ...[
-                                const SizedBox(width: 6),
+                              if (duty.isFaceVerified)
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: const Color(0xFF6366F1),
                                     borderRadius: BorderRadius.circular(6),
@@ -2027,39 +2458,35 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Icon(Icons.verified_user_rounded, color: Colors.white, size: 9),
+                                      const Icon(Icons.verified_user_rounded, color: Colors.white, size: 10),
                                       const SizedBox(width: 3),
                                       Text(
                                         duty.faceMatchScore != null
                                             ? 'Face (${duty.faceMatchScore!.toStringAsFixed(0)}%)'
                                             : 'Face Verified',
-                                        style: const TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.bold),
+                                        style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold),
                                       ),
                                     ],
                                   ),
                                 ),
-                              ],
-                              if (duty.isGeofenceVerified == true) ...[
-                                const SizedBox(width: 6),
+                              if (duty.isGeofenceVerified == true)
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: Colors.teal.shade700,
                                     borderRadius: BorderRadius.circular(6),
                                   ),
-                                  child: Text(s.geofenceVerified, style: const TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.bold)),
-                                ),
-                              ] else if (duty.geofenceStatus == 'manual_requested' || duty.geofenceStatus == 'outside') ...[
-                                const SizedBox(width: 6),
+                                  child: Text(s.geofenceVerified, style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold)),
+                                )
+                              else if (duty.geofenceStatus == 'manual_requested' || duty.geofenceStatus == 'outside')
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: Colors.orange.shade800,
                                     borderRadius: BorderRadius.circular(6),
                                   ),
-                                  child: Text(s.outsideGeofence, style: const TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.bold)),
+                                  child: Text(s.outsideGeofence, style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold)),
                                 ),
-                              ],
                             ],
                           ),
                           const SizedBox(height: 2),
@@ -2353,9 +2780,74 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
               ),
             ],
             const SizedBox(height: 10),
-            _buildInfoRow(Icons.calendar_today, '${s.date}: ${duty.date}'),
+            Row(
+              children: [
+                const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                const SizedBox(width: 6),
+                Text('${s.date}: ${duty.date}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF007A87).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    _getRelativeDateBadge(duty.date),
+                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF007A87)),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 6),
             _buildInfoRow(Icons.location_on_outlined, '${s.center}: ${duty.centerName}'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                if (duty.reportingTime.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF007A87).withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFF007A87).withValues(alpha: 0.2), width: 0.8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.access_time_rounded, size: 12, color: Color(0xFF007A87)),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Report: ${duty.reportingTime}',
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF007A87), fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (duty.dutyStartTime.isNotEmpty || duty.dutyEndTime.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF7C3AED).withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFF7C3AED).withValues(alpha: 0.2), width: 0.8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.timer_outlined, size: 12, color: Color(0xFF7C3AED)),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Exam: ${duty.dutyStartTime} - ${duty.dutyEndTime}',
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF7C3AED), fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
             const Divider(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

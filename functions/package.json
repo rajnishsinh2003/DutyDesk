@@ -1,0 +1,37 @@
+{
+  "name": "dutydesk-functions",
+  "version": "1.0.0",
+  "description": "DutyDesk AI Chatbot Cloud Functions (RAG + Vector Search + Admin Studio)",
+  "scripts": {
+    "lint": "tsc --noEmit",
+    "build": "tsc",
+    "serve": "npm run build && firebase emulators:start --only functions,firestore,storage",
+    "shell": "npm run build && firebase functions:shell",
+    "deploy": "firebase deploy --only functions",
+    "test": "vitest run",
+    "test:rules": "firebase emulators:exec --only firestore 'vitest run test/firestore.rules.test.ts'",
+    "set-admin": "npx ts-node scripts/set-admin-claim.ts"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "lib/index.js",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "@google/generative-ai": "^0.21.0",
+    "firebase-admin": "^13.0.2",
+    "firebase-functions": "^6.3.1",
+    "mammoth": "^1.8.0",
+    "openai": "^4.77.0",
+    "pdf-parse": "^1.1.1"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.4",
+    "@types/node": "^20.17.12",
+    "@types/pdf-parse": "^1.1.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "private": true
+}

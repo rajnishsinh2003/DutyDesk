@@ -10,6 +10,7 @@ class Invigilator {
   final String resourceId;
   final String mobile;
   final String? email;
+  final String? password;
   final String? address;
   final int mockDutyCount;
   final DateTime? lastMockAssignedDate;
@@ -39,6 +40,7 @@ class Invigilator {
     required this.resourceId,
     required this.mobile,
     this.email,
+    this.password,
     this.address,
     required this.mockDutyCount,
     this.lastMockAssignedDate,
@@ -66,6 +68,7 @@ class Invigilator {
     String? resourceId,
     String? mobile,
     String? email,
+    String? password,
     String? address,
     int? mockDutyCount,
     DateTime? lastMockAssignedDate,
@@ -92,6 +95,7 @@ class Invigilator {
       resourceId: resourceId ?? this.resourceId,
       mobile: mobile ?? this.mobile,
       email: email ?? this.email,
+      password: password ?? this.password,
       address: address ?? this.address,
       mockDutyCount: mockDutyCount ?? this.mockDutyCount,
       lastMockAssignedDate: lastMockAssignedDate ?? this.lastMockAssignedDate,
@@ -165,6 +169,7 @@ class InvigilatorNotifier extends Notifier<List<Invigilator>> {
           mobile: data['mobile'] ?? '',
           resourceId: data['resourceId'] ?? '',
           email: data['email'],
+          password: data['password'],
           address: data['address'],
           mockDutyCount: data['mockDutyCount'] ?? 0,
           lastMockAssignedDate: timestamp?.toDate(),

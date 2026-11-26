@@ -1656,6 +1656,14 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                     iconColor: const Color(0xFF007A87),
                     onTap: () => context.go('/admin_dashboard/student_portal'),
                   ),
+                  if (!isFinance)
+                    _ActionCard(
+                      title: s.chatbotStudio,
+                      subtitle: isAuditor ? 'Read-Only (Conversations)' : 'AI Docs, FAQs & Logs',
+                      icon: Icons.smart_toy_rounded,
+                      iconColor: const Color(0xFF007A87),
+                      onTap: () => context.go('/admin_dashboard/chatbot'),
+                    ),
                     ],
                   );
                 },

@@ -14,7 +14,7 @@ import '../../../core/services/smtp_email_service.dart';
 ///
 /// Step 1: Enter registered mobile number or email
 /// Step 2: Verify 6-digit OTP sent via email
-/// Step 3: Set a new Resource ID (password)
+/// Step 3: Set a new password (preserves permanent Resource ID assigned by admin)
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
 
@@ -396,11 +396,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
     final confirmPassword = _confirmPasswordController.text.trim();
 
     if (newPassword.isEmpty) {
-      setState(() => _errorMessage = 'Please enter a new Resource ID / Password.');
+      setState(() => _errorMessage = 'Please enter a new password.');
       return;
     }
     if (newPassword.length < 4) {
-      setState(() => _errorMessage = 'Resource ID must be at least 4 characters long.');
+      setState(() => _errorMessage = 'Password must be at least 4 characters long.');
       return;
     }
     if (newPassword != confirmPassword) {
@@ -437,12 +437,13 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
           'updatedBy': _resolvedEmail,
         }, SetOptions(merge: true));
       } else {
-        // Update the resourceId in invigilators collection
+        // Update ONLY the 'password' field in invigilators collection.
+        // NEVER update 'resourceId' — it is the permanent employee ID assigned by Admin.
         await FirebaseFirestore.instance
             .collection('invigilators')
             .doc(_resolvedInvigilatorDocId)
             .update({
-          'resourceId': newPassword,
+          'password': newPassword,
           'passwordUpdatedAt': FieldValue.serverTimestamp(),
         });
       }
@@ -460,8 +461,9 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
             toAddress: _resolvedEmail!,
             subject: 'DutyDesk — Password Reset Successful',
             bodyText: 'Dear ${_resolvedInvigilatorName ?? 'Invigilator'},\n\n'
-                'Your DutyDesk login credentials have been successfully updated.\n\n'
-                'You can now log in with your registered mobile number and your new Resource ID.\n\n'
+                'Your DutyDesk login password has been successfully updated.\n\n'
+                'You can now log in with your registered mobile number and your new password.\n\n'
+                'Your official Resource ID remains unchanged as assigned by your administrator.\n\n'
                 'If you did not make this change, please contact your administrator immediately.\n\n'
                 'Regards,\nDutyDesk Examination Management System',
           );
@@ -1265,7 +1267,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
 
         // New Password
         Text(
-          'New Resource ID / Password',
+          'New Password',
           style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: primaryText),
         ),
         const SizedBox(height: 8),
@@ -1275,7 +1277,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
           onChanged: (_) => setState(() {}),
           style: TextStyle(color: primaryText, fontWeight: FontWeight.w600, fontSize: 15),
           decoration: InputDecoration(
-            hintText: 'Enter new Resource ID',
+            hintText: 'Enter new password',
             hintStyle: TextStyle(color: secondaryText.withValues(alpha: 0.7), fontSize: 14),
             prefixIcon: const Icon(Icons.vpn_key_outlined, color: Color(0xFF007A87)),
             suffixIcon: IconButton(
@@ -1342,7 +1344,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
           obscureText: _obscureConfirmPassword,
           style: TextStyle(color: primaryText, fontWeight: FontWeight.w600, fontSize: 15),
           decoration: InputDecoration(
-            hintText: 'Re-enter new Resource ID',
+            hintText: 'Re-enter new password',
             hintStyle: TextStyle(color: secondaryText.withValues(alpha: 0.7), fontSize: 14),
             prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF007A87)),
             suffixIcon: IconButton(

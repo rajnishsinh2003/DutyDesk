@@ -445,5 +445,20 @@
   "standbyReplacement": "स्टैंडबाय प्रतिस्थापन",
   "incidentReport": "घटना रिपोर्ट",
   "reportExamIncident": "परीक्षा घटना दर्ज करें",
-  "incidentLogs": "घटना लॉग"
+  "incidentLogs": "घटना लॉग",
+  "chatbotTitle": "DutyDesk AI सहायक",
+  "chatbotAskHint": "अपना प्रश्न पूछें...",
+  "chatbotSend": "भेजें",
+  "chatbotClearChat": "चैट साफ़ करें",
+  "chatbotTyping": "सोच रहा है...",
+  "chatbotConsentTitle": "गोपनीयता एवं AI सूचना",
+  "chatbotConsentBody": "आपके प्रश्नों का उत्तर आधिकारिक परीक्षा दस्तावेज़ों के आधार पर DutyDesk AI द्वारा दिया जाता है। कृपया संवेदनशील पासवर्ड या निजी ID साझा न करें।",
+  "chatbotConsentAccept": "स्वीकार करें और चैट शुरू करें",
+  "chatbotSources": "स्रोत",
+  "chatbotHelpful": "क्या यह उत्तर उपयोगी था?",
+  "chatbotFeedbackThanks": "आपकी प्रतिक्रिया के लिए धन्यवाद!",
+  "chatbotFeedbackCommentHint": "वैकल्पिक टिप्पणी (क्या कमी थी?)",
+  "chatbotNeedMoreHelp": "मानव सहायता चाहिए? नियंत्रण कक्ष से संपर्क करें:",
+  "chatbotOffline": "आप ऑफ़लाइन प्रतीत होते हैं। कृपया इंटरनेट कनेक्शन जाँचें।",
+  "chatbotStudio": "चैटबॉट स्टूडियो"
 }

@@ -1301,4 +1301,52 @@ class SEn extends S {
 
   @override
   String get incidentLogs => 'Incident Logs';
+
+  @override
+  String get chatbotTitle => 'DutyDesk AI Assistant';
+
+  @override
+  String get chatbotAskHint => 'Ask a question...';
+
+  @override
+  String get chatbotSend => 'Send';
+
+  @override
+  String get chatbotClearChat => 'Clear chat';
+
+  @override
+  String get chatbotTyping => 'Thinking...';
+
+  @override
+  String get chatbotConsentTitle => 'Privacy & AI Notice';
+
+  @override
+  String get chatbotConsentBody =>
+      'Your questions are processed by DutyDesk AI using official examination documents. Do not share sensitive personal passwords or IDs. Chat logs help improve support.';
+
+  @override
+  String get chatbotConsentAccept => 'Accept & Start Chat';
+
+  @override
+  String get chatbotSources => 'Sources';
+
+  @override
+  String get chatbotHelpful => 'Was this helpful?';
+
+  @override
+  String get chatbotFeedbackThanks => 'Thanks for your feedback!';
+
+  @override
+  String get chatbotFeedbackCommentHint =>
+      'Optional comment (what was missing?)';
+
+  @override
+  String get chatbotNeedMoreHelp => 'Need human assistance? Contact Support:';
+
+  @override
+  String get chatbotOffline =>
+      'You appear to be offline. Please check your connection.';
+
+  @override
+  String get chatbotStudio => 'Chatbot Studio';
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../auth/auth_provider.dart';
+import '../../chatbot/presentation/widget/chatbot_launcher.dart';
 
 /// DutyDesk Official Web Landing & Overview Index Screen.
 /// Provides a comprehensive, enterprise-grade presentation of all DutyDesk modules,
@@ -239,6 +240,13 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
               brandColor: brandColor,
               isLoggedIn: authState.userId != null,
             ),
+          ),
+
+          // AI CHATBOT FLOATING LAUNCHER
+          const Positioned(
+            bottom: 20,
+            right: 20,
+            child: ChatbotLauncher(surface: 'landing'),
           ),
         ],
       ),
