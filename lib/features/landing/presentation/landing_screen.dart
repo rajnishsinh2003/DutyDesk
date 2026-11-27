@@ -693,7 +693,7 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
                             style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary),
                           ),
                           Text(
-                            'Real-time status across 42 testing centers & 1,280 examination rooms',
+                            'Real-time status across n testing centers & n examination rooms',
                             style: TextStyle(fontSize: 12, color: textSecondary),
                           ),
                         ],
@@ -717,10 +717,10 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
                     spacing: 12,
                     runSpacing: 10,
                     children: [
-                      _previewStatCard('Total Duties Allocated', '42,850', Icons.assignment_turned_in, const Color(0xFF2563EB), isDark),
-                      _previewStatCard('On-Time Arrival Rate', '99.98%', Icons.gps_fixed, const Color(0xFF10B981), isDark),
+                      _previewStatCard('Total Duties Allocated', '0', Icons.assignment_turned_in, const Color(0xFF2563EB), isDark),
+                      _previewStatCard('On-Time Arrival Rate', '0%', Icons.gps_fixed, const Color(0xFF10B981), isDark),
                       _previewStatCard('Paper Custody Breaches', '0', Icons.verified_user, const Color(0xFF007A87), isDark),
-                      _previewStatCard('Form B Script Balance', '100% Balanced', Icons.inventory_2, const Color(0xFF6366F1), isDark),
+                      _previewStatCard('Form B Script Balance', '0% Balanced', Icons.inventory_2, const Color(0xFF6366F1), isDark),
                     ],
                   ),
                 ],
@@ -789,26 +789,26 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
                 if (isNarrow) {
                   return Column(
                     children: [
-                      _metricStat('40,000+', 'Examination Duties Managed'),
+                      _metricStat('0+', 'Examination Duties Managed'),
                       const Divider(height: 24),
-                      _metricStat('100%', 'Zero-Leak Paper Custody'),
+                      _metricStat('0%', 'Zero-Leak Paper Custody'),
                       const Divider(height: 24),
-                      _metricStat('99.98%', 'Geofence Attendance Accuracy'),
+                      _metricStat('0%', 'Geofence Attendance Accuracy'),
                       const Divider(height: 24),
-                      _metricStat('39 / 39', 'Enterprise Modules Operational'),
+                      _metricStat('0 / 0', 'Enterprise Modules Operational'),
                     ],
                   );
                 }
                 return Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _metricStat('40,000+', 'Examination Duties Managed'),
+                    _metricStat('0+', 'Examination Duties Managed'),
                     _verticalDivider(cardBorder),
-                    _metricStat('100%', 'Zero-Leak Paper Custody'),
+                    _metricStat('0%', 'Zero-Leak Paper Custody'),
                     _verticalDivider(cardBorder),
-                    _metricStat('99.98%', 'Geofence Attendance Accuracy'),
+                    _metricStat('0%', 'Geofence Attendance Accuracy'),
                     _verticalDivider(cardBorder),
-                    _metricStat('39 / 39', 'Enterprise Modules Operational'),
+                    _metricStat('0 / 0', 'Enterprise Modules Operational'),
                   ],
                 );
               },
@@ -1818,7 +1818,7 @@ class _LandingScreenState extends ConsumerState<LandingScreen> {
                       const Icon(Icons.circle, color: Color(0xFF10B981), size: 10),
                       const SizedBox(width: 6),
                       Text(
-                        'All Systems Operational (2026 Season)',
+                        'All Systems Operational By EnviroWatch.Services (2026 )',
                         style: TextStyle(fontSize: 12, color: textSecondary, fontWeight: FontWeight.w600),
                       ),
                     ],

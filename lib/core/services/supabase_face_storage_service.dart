@@ -1,8 +1,6 @@
-import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// DEPRECATED: Supabase storage is no longer used for facial biometrics.
 /// DutyDesk has migrated to deep on-device face embeddings (MobileFaceNet + ML Kit)

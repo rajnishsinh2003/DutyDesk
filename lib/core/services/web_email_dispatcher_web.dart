@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:html' as html;
-import 'dart:js' as js;
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
-/// Web implementation using native browser fetch or XMLHttpRequest.
+/// Web implementation using window.dutyDeskSendEmail or HTTP POST.
 Future<bool> dispatchWebEmail({
   required String url,
   required String to,
@@ -13,19 +15,25 @@ Future<bool> dispatchWebEmail({
 }) async {
   // ── Strategy 1: Native browser fetch via window.dutyDeskSendEmail ──
   try {
-    if (js.context.hasProperty('dutyDeskSendEmail')) {
+    final fn = globalContext['dutyDeskSendEmail'];
+    if (fn != null && fn.isA<JSFunction>()) {
       final completer = Completer<bool>();
-      js.context.callMethod('dutyDeskSendEmail', [
-        to,
-        subject,
-        body,
-        fromName,
-        js.allowInterop((bool success, dynamic result) {
-          if (!completer.isCompleted) {
-            completer.complete(success);
-          }
-        }),
-      ]);
+      final callback = ((JSBoolean success, JSAny? result) {
+        if (!completer.isCompleted) {
+          completer.complete(success.toDart);
+        }
+      }).toJS;
+
+      globalContext.callMethodVarArgs(
+        'dutyDeskSendEmail'.toJS,
+        [
+          to.toJS,
+          subject.toJS,
+          body.toJS,
+          fromName.toJS,
+          callback,
+        ],
+      );
 
       final result = await completer.future.timeout(
         const Duration(seconds: 15),
@@ -34,45 +42,26 @@ Future<bool> dispatchWebEmail({
       if (result) return true;
     }
   } catch (e) {
-    html.window.console.warn('dutyDeskSendEmail window call error: $e');
+    debugPrint('dutyDeskSendEmail window call error: $e');
   }
 
-  // ── Strategy 2: Direct dart:html HttpRequest (CORS-friendly text/plain) ──
+  // ── Strategy 2: Direct HTTP POST (CORS-friendly text/plain) ──
   try {
-    final completer = Completer<bool>();
-    final xhr = html.HttpRequest();
-    xhr.open('POST', url, async: true);
-    xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
-
-    xhr.onLoad.listen((_) {
-      final status = xhr.status ?? 0;
-      if (!completer.isCompleted) {
-        completer.complete(status >= 200 && status < 400);
-      }
-    });
-
-    xhr.onError.listen((e) {
-      if (!completer.isCompleted) {
-        completer.complete(false);
-      }
-    });
-
-    final payload = jsonEncode({
-      'to': to,
-      'subject': subject,
-      'body': body,
-      'fromName': fromName,
-    });
-
-    xhr.send(payload);
-
-    return await completer.future.timeout(
-      const Duration(seconds: 15),
-      onTimeout: () => false,
-    );
+    final response = await http
+        .post(
+          Uri.parse(url.trim()),
+          headers: {'Content-Type': 'text/plain;charset=utf-8'},
+          body: jsonEncode({
+            'to': to,
+            'subject': subject,
+            'body': body,
+            'fromName': fromName,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+    return response.statusCode >= 200 && response.statusCode < 400;
   } catch (e) {
-    html.window.console.error('HttpRequest dispatch error: $e');
+    debugPrint('Web email HTTP dispatch error: $e');
     return false;
   }
 }
-

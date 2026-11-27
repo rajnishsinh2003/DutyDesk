@@ -2,3 +2,6 @@ project_id = "mihrdepkliehtlekepdc"
 
 [functions.chatbot-api]
 verify_jwt = false
+
+[functions.auth-api]
+verify_jwt = false

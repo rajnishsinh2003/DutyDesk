@@ -1,13 +1,9 @@
 import 'dart:async';
-import 'dart:math';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
-import '../../../core/services/smtp_email_service.dart';
+import '../services/auth_api_service.dart';
 
 /// Forgot Password Screen — 3-Step OTP-based password (Resource ID) reset
 /// for Invigilators.
@@ -43,9 +39,10 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
   bool _obscureConfirmPassword = true;
 
   // ── OTP State ──
-  String? _resolvedEmail; // The email we found and sent OTP to
+  String? _resolvedEmail; // Masked email returned by server
   String? _resolvedInvigilatorDocId;
   String? _resolvedInvigilatorName;
+  String? _resetToken;
   int _resendCooldown = 0;
   Timer? _resendTimer;
 
@@ -82,7 +79,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
 
 
   // ─────────────────────────────────────────────────────
-  // STEP 1: Look up invigilator by mobile/email/ID → send OTP
+  // STEP 1: Look up account server-side → send OTP
   // ─────────────────────────────────────────────────────
   Future<void> _handleSendOtp() async {
     final input = _mobileController.text.trim();
@@ -98,176 +95,23 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
     });
 
     try {
-      if (Firebase.apps.isEmpty) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = 'Firebase is not initialized. Please check your internet connection.';
-        });
-        return;
-      }
+      final result = await AuthApiService.requestPasswordOtp(identifier: input);
+      _resolvedEmail = result['maskedEmail'] as String?;
+      _resolvedInvigilatorDocId = result['docId'] as String?;
+      _resolvedInvigilatorName = input;
+      _resetToken = null;
 
-      // Search Firestore for matching invigilator
-      QuerySnapshot? snapshot;
-      final cleanInput = input.trim();
-      final lowerInput = cleanInput.toLowerCase();
-      final digitsOnly = cleanInput.replaceAll(RegExp(r'\D'), '');
-
-      // 1. Try mobile first
-      snapshot = await FirebaseFirestore.instance
-          .collection('invigilators')
-          .where('mobile', isEqualTo: cleanInput)
-          .limit(1)
-          .get();
-
-      // 1b. If mobile has 10 digits, match last 10 digits
-      if (snapshot.docs.isEmpty && digitsOnly.isNotEmpty) {
-        final last10 = digitsOnly.length >= 10
-            ? digitsOnly.substring(digitsOnly.length - 10)
-            : digitsOnly;
-        final res = await FirebaseFirestore.instance
-            .collection('invigilators')
-            .where('mobile', isEqualTo: last10)
-            .limit(1)
-            .get();
-        if (res.docs.isNotEmpty) {
-          snapshot = res;
-        }
-      }
-
-      // 2. Try email match
-      if (snapshot.docs.isEmpty) {
-        snapshot = await FirebaseFirestore.instance
-            .collection('invigilators')
-            .where('email', isEqualTo: lowerInput)
-            .limit(1)
-            .get();
-      }
-
-      if (snapshot.docs.isEmpty) {
-        snapshot = await FirebaseFirestore.instance
-            .collection('invigilators')
-            .where('email', isEqualTo: cleanInput)
-            .limit(1)
-            .get();
-      }
-
-      // 3. Try resourceId / Staff ID match
-      if (snapshot.docs.isEmpty) {
-        snapshot = await FirebaseFirestore.instance
-            .collection('invigilators')
-            .where('resourceId', isEqualTo: cleanInput)
-            .limit(1)
-            .get();
-      }
-
-      if (snapshot.docs.isEmpty) {
-        snapshot = await FirebaseFirestore.instance
-            .collection('invigilators')
-            .where('resourceId', isEqualTo: cleanInput.toUpperCase())
-            .limit(1)
-            .get();
-      }
-
-      String docId;
-      String recipientEmail;
-      String invName;
-      String userMobile = '';
-
-      if (snapshot.docs.isEmpty) {
-        final isAdminIdentifier = lowerInput == 'admin' ||
-            lowerInput == 'admin@dutydesk.com' ||
-            lowerInput == 'admin@gmail.com' ||
-            lowerInput == 'envirowatch.service@gmail.com' ||
-            lowerInput == 'examadmin';
-
-        if (isAdminIdentifier) {
-          docId = 'admin-master';
-          recipientEmail = 'envirowatch.service@gmail.com';
-          invName = 'Chief Examination Admin';
-        } else {
-          setState(() {
-            _isLoading = false;
-            _errorMessage =
-                'No user or invigilator found with this mobile number, email, or Resource ID. Please check your details.';
-          });
-          return;
-        }
-      } else {
-        final doc = snapshot.docs.first;
-        final data = doc.data() as Map<String, dynamic>;
-        final email = data['email'] as String?;
-        final name = data['name'] as String? ?? 'Invigilator';
-        final mobile = data['mobile'] as String? ?? '';
-
-        if (email == null || email.trim().isEmpty || !email.contains('@') || email.trim().endsWith('@dutydesk.local')) {
-          setState(() {
-            _isLoading = false;
-            _errorMessage =
-                'No registered email address found for this account. Please contact your examination administrator to update your email address in DutyDesk.';
-          });
-          return;
-        }
-
-        docId = doc.id;
-        recipientEmail = email.trim();
-        invName = name;
-        userMobile = mobile;
-      }
-
-      _resolvedEmail = recipientEmail;
-      _resolvedInvigilatorDocId = docId;
-      _resolvedInvigilatorName = invName;
-
-      // Generate 6-digit OTP on our end
-      final otp = _generateOtp();
-
-      // Store OTP in Firestore with 10 minute expiration
-      await FirebaseFirestore.instance.collection('password_reset_otps').doc(docId).set({
-        'otp': otp,
-        'email': _resolvedEmail,
-        'mobile': userMobile,
-        'invigilatorName': invName,
-        'createdAt': FieldValue.serverTimestamp(),
-        'expiresAt': Timestamp.fromDate(DateTime.now().add(const Duration(minutes: 10))),
-        'verified': false,
-        'attempts': 0,
-      });
-
-      // Dispatch OTP email
-      try {
-        await SmtpEmailService.sendEmail(
-          toAddress: _resolvedEmail!,
-          subject: 'DutyDesk — Password Reset OTP',
-          bodyText: 'Dear $invName,\n\n'
-              'Your one-time password (OTP) for resetting your DutyDesk credentials is:\n\n'
-              '    $otp\n\n'
-              'This OTP is valid for 10 minutes. Do not share it with anyone.\n\n'
-              'If you did not request this, please ignore this email.\n\n'
-              'Regards,\nDutyDesk Examination Management System',
-        );
-      } catch (e) {
-        debugPrint('Email send error: $e');
-        setState(() {
-          _isLoading = false;
-          _errorMessage =
-              'Failed to deliver OTP to ${_maskEmail(_resolvedEmail!)}. Please check your internet connection and try again.';
-        });
-        return;
-      }
-
-      // Start resend cooldown
       _startResendCooldown();
 
-      // Advance to Step 2
       setState(() {
         _isLoading = false;
         _currentStep = 1;
-        _successMessage = 'A 6-digit OTP has been sent to ${_maskEmail(_resolvedEmail!)}. Please check your email inbox and spam folder.';
+        _successMessage =
+            'A 6-digit OTP has been sent to ${_resolvedEmail ?? 'your email'}. Please check your email inbox and spam folder.';
       });
       _animController.reset();
       _animController.forward();
 
-      // Clean notification snackbar
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -277,7 +121,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'OTP sent to ${_maskEmail(_resolvedEmail!)}. Please check your email.',
+                    'OTP sent to ${_resolvedEmail ?? 'your email'}. Please check your email.',
                     style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                   ),
                 ),
@@ -290,9 +134,13 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
         );
       }
 
-      // Focus first OTP box
       Future.delayed(const Duration(milliseconds: 300), () {
         if (mounted) _otpFocusNodes[0].requestFocus();
+      });
+    } on AuthApiException catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.message;
       });
     } catch (e) {
       setState(() {
@@ -303,13 +151,17 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
   }
 
   // ─────────────────────────────────────────────────────
-  // STEP 2: Verify OTP
+  // STEP 2: Verify OTP server-side
   // ─────────────────────────────────────────────────────
   Future<void> _handleVerifyOtp() async {
     final enteredOtp = _otpControllers.map((c) => c.text).join();
 
     if (enteredOtp.length != 6) {
       setState(() => _errorMessage = 'Please enter the complete 6-digit OTP.');
+      return;
+    }
+    if (_resolvedInvigilatorDocId == null) {
+      setState(() => _errorMessage = 'Session expired. Please request a new OTP.');
       return;
     }
 
@@ -320,59 +172,12 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
     });
 
     try {
-      // Read OTP document from Firestore
-      final docRef = FirebaseFirestore.instance
-          .collection('password_reset_otps')
-          .doc(_resolvedInvigilatorDocId);
-      final otpDoc = await docRef.get();
+      final result = await AuthApiService.verifyPasswordOtp(
+        docId: _resolvedInvigilatorDocId!,
+        otp: enteredOtp,
+      );
+      _resetToken = result['resetToken'] as String?;
 
-      if (!otpDoc.exists) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = 'OTP has expired or is invalid. Please request a new one.';
-        });
-        return;
-      }
-
-      final data = otpDoc.data()!;
-      final storedOtp = data['otp'] as String;
-      final expiresAt = (data['expiresAt'] as Timestamp).toDate();
-      final attempts = (data['attempts'] as int?) ?? 0;
-
-      // Check max attempts (5)
-      if (attempts >= 5) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = 'Too many incorrect attempts. Please request a new OTP.';
-        });
-        return;
-      }
-
-      // Check expiration
-      if (DateTime.now().isAfter(expiresAt)) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = 'OTP has expired. Please request a new one.';
-        });
-        return;
-      }
-
-      // Increment attempts
-      await docRef.update({'attempts': attempts + 1});
-
-      // Verify
-      if (enteredOtp != storedOtp) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = 'Incorrect OTP. ${4 - attempts} attempts remaining.';
-        });
-        return;
-      }
-
-      // Mark as verified
-      await docRef.update({'verified': true});
-
-      // Advance to Step 3
       setState(() {
         _isLoading = false;
         _currentStep = 2;
@@ -380,6 +185,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
       });
       _animController.reset();
       _animController.forward();
+    } on AuthApiException catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.message;
+      });
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -389,7 +199,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
   }
 
   // ─────────────────────────────────────────────────────
-  // STEP 3: Set new Resource ID (password)
+  // STEP 3: Reset password server-side with resetToken
   // ─────────────────────────────────────────────────────
   Future<void> _handleResetPassword() async {
     final newPassword = _newPasswordController.text.trim();
@@ -399,12 +209,16 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
       setState(() => _errorMessage = 'Please enter a new password.');
       return;
     }
-    if (newPassword.length < 4) {
-      setState(() => _errorMessage = 'Password must be at least 4 characters long.');
+    if (newPassword.length < 6) {
+      setState(() => _errorMessage = 'Password must be at least 6 characters long.');
       return;
     }
     if (newPassword != confirmPassword) {
       setState(() => _errorMessage = 'Passwords do not match. Please re-enter.');
+      return;
+    }
+    if (_resolvedInvigilatorDocId == null || _resetToken == null) {
+      setState(() => _errorMessage = 'OTP verification expired. Please start over.');
       return;
     }
 
@@ -415,66 +229,14 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
     });
 
     try {
-      // Double-check OTP was verified
-      final otpDoc = await FirebaseFirestore.instance
-          .collection('password_reset_otps')
-          .doc(_resolvedInvigilatorDocId)
-          .get();
-
-      if (!otpDoc.exists || otpDoc.data()?['verified'] != true) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = 'OTP verification expired. Please start over.';
-        });
-        return;
-      }
-
-      // Update password in Firestore
-      if (_resolvedInvigilatorDocId == 'admin-master') {
-        await FirebaseFirestore.instance.collection('settings').doc('admin_credentials').set({
-          'password': newPassword,
-          'passwordUpdatedAt': FieldValue.serverTimestamp(),
-          'updatedBy': _resolvedEmail,
-        }, SetOptions(merge: true));
-      } else {
-        // Update ONLY the 'password' field in invigilators collection.
-        // NEVER update 'resourceId' — it is the permanent employee ID assigned by Admin.
-        await FirebaseFirestore.instance
-            .collection('invigilators')
-            .doc(_resolvedInvigilatorDocId)
-            .update({
-          'password': newPassword,
-          'passwordUpdatedAt': FieldValue.serverTimestamp(),
-        });
-      }
-
-      // Clean up the OTP document
-      await FirebaseFirestore.instance
-          .collection('password_reset_otps')
-          .doc(_resolvedInvigilatorDocId)
-          .delete();
-
-      // Send confirmation email (mobile only)
-      if (!kIsWeb) {
-        try {
-          await SmtpEmailService.sendEmail(
-            toAddress: _resolvedEmail!,
-            subject: 'DutyDesk — Password Reset Successful',
-            bodyText: 'Dear ${_resolvedInvigilatorName ?? 'Invigilator'},\n\n'
-                'Your DutyDesk login password has been successfully updated.\n\n'
-                'You can now log in with your registered mobile number and your new password.\n\n'
-                'Your official Resource ID remains unchanged as assigned by your administrator.\n\n'
-                'If you did not make this change, please contact your administrator immediately.\n\n'
-                'Regards,\nDutyDesk Examination Management System',
-          );
-        } catch (_) {
-          // Email confirmation is best-effort
-        }
-      }
+      await AuthApiService.resetPasswordWithToken(
+        docId: _resolvedInvigilatorDocId!,
+        resetToken: _resetToken!,
+        newPassword: newPassword,
+      );
 
       if (!mounted) return;
 
-      // Show success dialog then navigate back
       await showDialog(
         context: context,
         barrierDismissible: false,
@@ -500,7 +262,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
               ),
               const SizedBox(height: 10),
               Text(
-                'Your credentials have been updated.\nYou can now log in with your new Resource ID.',
+                'Your credentials have been updated.\nYou can now log in with your new password.',
                 style: TextStyle(fontSize: 14, color: Colors.grey.shade600, height: 1.5),
                 textAlign: TextAlign.center,
               ),
@@ -525,6 +287,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
           ),
         ),
       );
+    } on AuthApiException catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.message;
+      });
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -538,6 +305,8 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
   // ─────────────────────────────────────────────────────
   Future<void> _handleResendOtp() async {
     if (_resendCooldown > 0) return;
+    final input = _mobileController.text.trim();
+    if (input.isEmpty) return;
 
     setState(() {
       _isLoading = true;
@@ -545,41 +314,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
     });
 
     try {
-      final otp = _generateOtp();
+      final result = await AuthApiService.requestPasswordOtp(identifier: input);
+      _resolvedEmail = result['maskedEmail'] as String?;
+      _resolvedInvigilatorDocId = result['docId'] as String?;
+      _resetToken = null;
 
-      await FirebaseFirestore.instance
-          .collection('password_reset_otps')
-          .doc(_resolvedInvigilatorDocId)
-          .set({
-        'otp': otp,
-        'email': _resolvedEmail,
-        'invigilatorName': _resolvedInvigilatorName ?? '',
-        'createdAt': FieldValue.serverTimestamp(),
-        'expiresAt': Timestamp.fromDate(DateTime.now().add(const Duration(minutes: 10))),
-        'verified': false,
-        'attempts': 0,
-      });
-
-      try {
-        await SmtpEmailService.sendEmail(
-          toAddress: _resolvedEmail!,
-          subject: 'DutyDesk — Password Reset OTP (Resent)',
-          bodyText: 'Dear ${_resolvedInvigilatorName ?? 'Invigilator'},\n\n'
-              'Your new one-time password (OTP) is:\n\n'
-              '    $otp\n\n'
-              'This OTP is valid for 10 minutes.\n\n'
-              'Regards,\nDutyDesk Examination Management System',
-        );
-      } catch (e) {
-        debugPrint('Resend email error: $e');
-        setState(() {
-          _isLoading = false;
-          _errorMessage = 'Failed to resend OTP email. Please try again in a few moments.';
-        });
-        return;
-      }
-
-      // Clear old OTP entries
       for (final c in _otpControllers) {
         c.clear();
       }
@@ -588,7 +327,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
 
       setState(() {
         _isLoading = false;
-        _successMessage = 'A new 6-digit OTP has been sent to ${_maskEmail(_resolvedEmail!)}.';
+        _successMessage = 'A new 6-digit OTP has been sent to ${_resolvedEmail ?? 'your email'}.';
       });
 
       if (mounted) {
@@ -600,7 +339,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'New verification OTP sent to ${_maskEmail(_resolvedEmail!)}.',
+                    'New verification OTP sent to ${_resolvedEmail ?? 'your email'}.',
                     style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                   ),
                 ),
@@ -612,6 +351,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
           ),
         );
       }
+    } on AuthApiException catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.message;
+      });
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -623,12 +367,8 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
   // ─────────────────────────────────────────────────────
   // Helpers
   // ─────────────────────────────────────────────────────
-  String _generateOtp() {
-    final rng = Random.secure();
-    return List.generate(6, (_) => rng.nextInt(10)).join();
-  }
-
   String _maskEmail(String email) {
+    if (email.contains('*')) return email;
     final parts = email.split('@');
     if (parts.length != 2) return email;
     final name = parts[0];

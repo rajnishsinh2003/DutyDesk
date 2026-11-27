@@ -1,8 +1,6 @@
 import 'dart:ui';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
-import '../config/face_config.dart';
 
 /// Result of ML Kit face detection and quality validation on an image (Web stub).
 class DetectedFaceInfo {

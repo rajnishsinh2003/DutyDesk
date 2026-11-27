@@ -67,6 +67,7 @@ class CenterNotifier extends Notifier<List<ExamCenter>> {
     _subscription?.cancel();
     _subscription = FirebaseFirestore.instance
         .collection('centers')
+        .limit(200)
         .snapshots()
         .listen((snapshot) {
       state = snapshot.docs.map((doc) {
@@ -154,4 +155,19 @@ class CenterNotifier extends Notifier<List<ExamCenter>> {
 
 final centerProvider = NotifierProvider<CenterNotifier, List<ExamCenter>>(() {
   return CenterNotifier();
+});
+
+/// O(1) lookup map from center ID to [ExamCenter].
+final centerMapProvider = Provider<Map<String, ExamCenter>>((ref) {
+  final list = ref.watch(centerProvider);
+  return {for (final c in list) c.id: c};
+});
+
+/// O(1) lookup map from center name to [ExamCenter].
+final centerByNameProvider = Provider<Map<String, ExamCenter>>((ref) {
+  final list = ref.watch(centerProvider);
+  return {
+    for (final c in list)
+      if (c.name.isNotEmpty) c.name: c,
+  };
 });

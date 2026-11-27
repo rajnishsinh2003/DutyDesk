@@ -398,8 +398,7 @@ class DutyNotifier extends Notifier<List<ExamDuty>> {
 
   @override
   List<ExamDuty> build() {
-    final authState = ref.watch(authProvider);
-    final invigilatorId = authState.userId;
+    final invigilatorId = ref.watch(authProvider.select((s) => s.userId));
 
     if (invigilatorId == null) {
       return [];
@@ -413,6 +412,7 @@ class DutyNotifier extends Notifier<List<ExamDuty>> {
     _subscription = FirebaseFirestore.instance
         .collection('duties')
         .where('invigilatorId', isEqualTo: invigilatorId)
+        .limit(200)
         .snapshots()
         .listen((snapshot) {
       state = snapshot.docs.map((doc) => ExamDuty.fromFirestore(doc.id, doc.data())).toList();
@@ -1453,6 +1453,7 @@ class GlobalDutyNotifier extends Notifier<List<ExamDuty>> {
     _subscription?.cancel();
     _subscription = FirebaseFirestore.instance
         .collection('duties')
+        .limit(1000)
         .snapshots()
         .listen((snapshot) {
       state = snapshot.docs.map((doc) => ExamDuty.fromFirestore(doc.id, doc.data())).toList();
@@ -1474,4 +1475,16 @@ final dutyProvider = NotifierProvider<DutyNotifier, List<ExamDuty>>(() {
 
 final globalDutyProvider = NotifierProvider<GlobalDutyNotifier, List<ExamDuty>>(() {
   return GlobalDutyNotifier();
+});
+
+/// O(1) lookup map from duty ID to [ExamDuty] for the current invigilator.
+final dutyMapProvider = Provider<Map<String, ExamDuty>>((ref) {
+  final list = ref.watch(dutyProvider);
+  return {for (final d in list) d.id: d};
+});
+
+/// O(1) lookup map from duty ID to [ExamDuty] across all duties.
+final globalDutyMapProvider = Provider<Map<String, ExamDuty>>((ref) {
+  final list = ref.watch(globalDutyProvider);
+  return {for (final d in list) d.id: d};
 });

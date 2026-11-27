@@ -53,7 +53,7 @@ void main() {
               phone: '+91-9999999999',
               email: 'support@dutydesk.com',
             ),
-            onFeedback: (_, __) async {},
+            onFeedback: (_, _) async {},
           ),
         ),
       ),

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
@@ -103,7 +102,6 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
   Map<String, List<double>> _referenceEmbeddings = {};
   bool _isFetchingEmbeddings = true;
   String? _embeddingFetchError;
-  bool _needsReEnrollment = false;
 
   // Camera state
   CameraController? _cameraController;
@@ -196,7 +194,6 @@ class _FaceVerificationDialogState extends State<FaceVerificationDialog>
       if (mounted) {
         setState(() {
           _isFetchingEmbeddings = false;
-          _needsReEnrollment = hadLegacy;
           _embeddingFetchError = hadLegacy
               ? 'Your face profile was registered under an older format. Please re-enroll your 3 face angles to activate deep biometric verification.'
               : 'No biometric face embeddings enrolled. Please complete 3-angle face enrollment.';

@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
@@ -142,7 +141,6 @@ class FaceEmbeddingService {
 
     final face = faces.first;
     final w = decoded.width.toDouble();
-    final h = decoded.height.toDouble();
 
     // Head Euler angles
     double rawYaw = face.headEulerAngleY ?? 0.0;

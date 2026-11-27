@@ -131,6 +131,7 @@ class InvigilatorNotifier extends Notifier<List<Invigilator>> {
     _subscription?.cancel();
     _subscription = FirebaseFirestore.instance
         .collection('invigilators')
+        .limit(500)
         .snapshots()
         .listen((snapshot) {
       state = snapshot.docs.map((doc) {
@@ -347,7 +348,7 @@ class InvigilatorNotifier extends Notifier<List<Invigilator>> {
     try {
       await FirebaseFirestore.instance.collection('invigilators').doc(id).delete();
     } catch (e) {
-      // Handle error
+      log('Error deleting invigilator: $e');
     }
   }
 
@@ -383,4 +384,19 @@ class InvigilatorNotifier extends Notifier<List<Invigilator>> {
 final invigilatorProvider =
     NotifierProvider<InvigilatorNotifier, List<Invigilator>>(() {
   return InvigilatorNotifier();
+});
+
+/// O(1) lookup map from invigilator doc ID to [Invigilator].
+final invigilatorMapProvider = Provider<Map<String, Invigilator>>((ref) {
+  final list = ref.watch(invigilatorProvider);
+  return {for (final inv in list) inv.id: inv};
+});
+
+/// O(1) lookup map from invigilator resourceId to [Invigilator].
+final invigilatorByResourceIdProvider = Provider<Map<String, Invigilator>>((ref) {
+  final list = ref.watch(invigilatorProvider);
+  return {
+    for (final inv in list)
+      if (inv.resourceId.isNotEmpty) inv.resourceId: inv,
+  };
 });

@@ -24,6 +24,7 @@ import 'digital_gate_pass_dialog.dart';
 import '../../face_verification/presentation/multi_angle_face_enrollment_dialog.dart';
 import '../../../core/services/ble_beacon_service.dart';
 import '../../chatbot/presentation/widget/chatbot_launcher.dart';
+import 'widgets/invigilator_dashboard_widgets.dart';
 
 class InvigilatorDashboardScreen extends ConsumerStatefulWidget {
   const InvigilatorDashboardScreen({super.key});
@@ -466,7 +467,6 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
     required String centerName,
     required GeofenceResult geofence,
   }) {
-    final s = S.of(context)!;
     return showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -1139,27 +1139,26 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
   Widget build(BuildContext context) {
     final s = S.of(context)!;
     final duties = ref.watch(dutyProvider);
-    final auth = ref.watch(authProvider);
+    final userId = ref.watch(authProvider.select((a) => a.userId));
+    final userName = ref.watch(authProvider.select((a) => a.userName));
     final invs = ref.watch(invigilatorProvider);
     final dutySettings = ref.watch(dutySettingsProvider);
     final unreadNotifications = ref.watch(unreadNotificationCountProvider);
 
-    final matchingInvs = invs.where((i) => i.id == auth.userId).toList();
-    final currentInv = matchingInvs.isNotEmpty
-        ? matchingInvs.first
-        : Invigilator(
-            id: auth.userId ?? '',
-            name: (auth.userName != null && auth.userName!.isNotEmpty) ? auth.userName! : 'Invigilator',
-            resourceId: '-',
-            mobile: '',
-            mockDutyCount: 0,
-            isActive: true,
-          );
+    final currentInv = ref.watch(invigilatorMapProvider.select((m) => userId != null ? m[userId] : null)) ??
+        Invigilator(
+          id: userId ?? '',
+          name: (userName != null && userName.isNotEmpty) ? userName : 'Invigilator',
+          resourceId: '-',
+          mobile: '',
+          mockDutyCount: 0,
+          isActive: true,
+        );
 
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final screenBgColor = isDarkMode ? const Color(0xFF0F172A) : Colors.white;
 
-    if (auth.userId == null && invs.isEmpty) {
+    if (userId == null && invs.isEmpty) {
       return Scaffold(
         backgroundColor: screenBgColor,
         body: const Center(
@@ -3553,7 +3552,7 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                                   height: 70,
                                   width: double.infinity,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
+                                  errorBuilder: (_, _, _) => Container(
                                     height: 70,
                                     color: Colors.grey.shade200,
                                     child: const Icon(Icons.person, color: Colors.grey),
@@ -3578,7 +3577,7 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                                   height: 70,
                                   width: double.infinity,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
+                                  errorBuilder: (_, _, _) => Container(
                                     height: 70,
                                     color: Colors.grey.shade200,
                                     child: const Icon(Icons.turn_left, color: Colors.grey),
@@ -3603,7 +3602,7 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                                   height: 70,
                                   width: double.infinity,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
+                                  errorBuilder: (_, _, _) => Container(
                                     height: 70,
                                     color: Colors.grey.shade200,
                                     child: const Icon(Icons.turn_right, color: Colors.grey),
@@ -3637,6 +3636,7 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: () async {
+                      final messenger = ScaffoldMessenger.of(context);
                       final updated = await MultiAngleFaceEnrollmentDialog.show(
                         context,
                         staffDocId: inv.id,
@@ -3646,8 +3646,8 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
                         existingLeftUrl: inv.faceLeftUrl,
                         existingRightUrl: inv.faceRightUrl,
                       );
-                      if (updated == true && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                      if (updated == true) {
+                        messenger.showSnackBar(
                           const SnackBar(
                             content: Row(
                               children: [
@@ -3724,58 +3724,22 @@ class _InvigilatorDashboardScreenState extends ConsumerState<InvigilatorDashboar
   }
 
   Widget _buildReadOnlyRow(IconData icon, String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 20, color: const Color(0xFF007A87)),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-              const SizedBox(height: 2),
-              Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-            ],
-          ),
-        ),
-      ],
-    );
+    return InvigilatorReadOnlyRow(icon: icon, label: label, value: value);
   }
 
   // ---------------------------------------------------------------------------
   // SMALL WIDGET HELPERS
   // ---------------------------------------------------------------------------
   Widget _buildStatusBadge(String status, S s) {
-    Color color;
-    String label = status;
-    switch (status.toLowerCase()) {
-      case 'accepted': 
-        color = Colors.green; 
-        label = s.accepted;
-        break;
-      case 'rejected': 
-        color = Colors.red; 
-        label = s.rejected;
-        break;
-      default: 
-        color = Colors.orange;
-        label = s.pending;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
-      child: Text(label.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+    return InvigilatorStatusBadge(
+      status: status,
+      acceptedLabel: s.accepted,
+      rejectedLabel: s.rejected,
+      pendingLabel: s.pending,
     );
   }
 
   Widget _buildInfoRow(IconData icon, String text) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: Colors.grey.shade500),
-        const SizedBox(width: 8),
-        Expanded(child: Text(text, style: TextStyle(color: Colors.grey.shade700, fontSize: 13))),
-      ],
-    );
+    return InvigilatorInfoRow(icon: icon, text: text);
   }
 }

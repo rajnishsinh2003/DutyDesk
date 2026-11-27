@@ -7,13 +7,14 @@ void main() {
     // Build our app under ProviderScope and trigger a frame.
     await tester.pumpWidget(const ProviderScope(child: DutyDeskApp()));
 
-    // Verify that the splash screen text exists.
-    expect(find.text('DutyDesk'), findsOneWidget);
-    expect(find.text('Exam Invigilation Management'), findsOneWidget);
+    // Verify that the splash screen branding text exists.
+    expect(find.text('Duty'), findsOneWidget);
+    expect(find.text('Desk'), findsOneWidget);
+    expect(find.text('EXAM INVIGILATION MANAGEMENT'), findsOneWidget);
 
     // Advance virtual clock by 3 seconds to trigger the delayed navigation timer.
     await tester.pump(const Duration(seconds: 3));
-    await tester.pumpAndSettle();
+    await tester.pump();
   });
 }
 

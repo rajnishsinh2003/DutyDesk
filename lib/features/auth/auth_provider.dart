@@ -1,9 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'services/auth_api_service.dart';
 
 // User Roles for Role-Based Access Control (RBAC)
 enum UserRole { admin, invigilator, finance, auditor, none }
@@ -124,11 +124,21 @@ class AuthNotifier extends Notifier<AuthState> {
       await prefs.setString('role', role.name);
       await prefs.setString('userId', userId);
       await prefs.setString('userName', userName);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Failed to persist session preferences: $e');
+    }
   }
 
   /// 1-Click Instant Demo Authentication for rapid evaluation of all 4 roles.
+  /// Restricted to debug builds only.
   Future<void> loginAsDemoRole(UserRole role) async {
+    if (!kDebugMode) {
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Demo login is disabled in release builds.',
+      );
+      return;
+    }
     state = state.copyWith(isLoading: true, error: null);
     await Future.delayed(const Duration(milliseconds: 300));
 
@@ -174,7 +184,9 @@ class AuthNotifier extends Notifier<AuthState> {
       await prefs.setString('role', roleStr);
       await prefs.setString('userId', userId);
       await prefs.setString('userName', userName);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Failed to persist demo session preferences: $e');
+    }
   }
 
   Future<void> login(String mobile, String password, bool isAdminLogin) async {
@@ -183,59 +195,24 @@ class AuthNotifier extends Notifier<AuthState> {
     final cleanMobile = mobile.trim();
     final cleanPassword = password.trim();
     final lowerMobile = cleanMobile.toLowerCase();
-    final lowerPass = cleanPassword.toLowerCase();
 
-    // 1. Instant check for built-in roles & demo accounts
-    if (lowerMobile == 'finance' || lowerMobile == 'finance@dutydesk.com') {
-      await loginAsDemoRole(UserRole.finance);
+    if (cleanMobile.isEmpty || cleanPassword.isEmpty) {
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Please enter both username/mobile and password.',
+      );
       return;
-    }
-    if (lowerMobile == 'auditor' || lowerMobile == 'auditor@dutydesk.com' || lowerMobile == 'observer') {
-      await loginAsDemoRole(UserRole.auditor);
-      return;
-    }
-    final isAdminKeyword = lowerMobile == 'admin' || 
-                           lowerMobile == 'admin@dutydesk.com' || 
-                           lowerMobile == 'admin@gmail.com' || 
-                           lowerMobile == 'examadmin' ||
-                           lowerMobile.startsWith('admin');
-    final isDefaultAdminPass = lowerPass == 'admin' || 
-                               lowerPass == 'admin123' || 
-                               lowerPass == 'admin@123' || 
-                               lowerPass == '123456' || 
-                               lowerPass == 'password';
-    if (isAdminKeyword && isDefaultAdminPass) {
-      await loginAsDemoRole(UserRole.admin);
-      return;
-    }
-
-    // Check custom updated admin credentials in Firestore
-    if (isAdminKeyword || isAdminLogin) {
-      try {
-        final credDoc = await FirebaseFirestore.instance.collection('settings').doc('admin_credentials').get();
-        if (credDoc.exists && credDoc.data() != null) {
-          final customPass = credDoc.data()?['password'] as String?;
-          if (customPass != null && customPass.isNotEmpty && cleanPassword == customPass) {
-            await loginAsDemoRole(UserRole.admin);
-            return;
-          }
-        }
-      } catch (_) {}
     }
 
     // Determine if this should be treated as an Admin / Staff-Officer login
-    final shouldTreatAsAdmin = isAdminLogin || 
-                               lowerMobile.contains('admin') || 
-                               lowerMobile.contains('finance') || 
-                               lowerMobile.contains('auditor') || 
-                               cleanMobile.contains('@');
+    final shouldTreatAsAdmin = isAdminLogin ||
+        lowerMobile.contains('admin') ||
+        lowerMobile.contains('finance') ||
+        lowerMobile.contains('auditor') ||
+        cleanMobile.contains('@');
 
     if (shouldTreatAsAdmin) {
       if (Firebase.apps.isEmpty) {
-        if (isAdminKeyword) {
-          await loginAsDemoRole(UserRole.admin);
-          return;
-        }
         state = state.copyWith(
           isLoading: false,
           error: 'Firebase is not initialized. Check internet connection.',
@@ -250,15 +227,25 @@ class AuthNotifier extends Notifier<AuthState> {
           password: cleanPassword,
         );
 
+        final idTokenResult = await userCredential.user?.getIdTokenResult(true);
+        final claims = idTokenResult?.claims ?? const <String, dynamic>{};
+
         UserRole targetRole = UserRole.admin;
         String displayName = 'Admin User';
         final emailLower = email.toLowerCase();
-        if (emailLower.contains('finance') || emailLower.contains('account')) {
+        if (claims['finance'] == true ||
+            emailLower.contains('finance') ||
+            emailLower.contains('account')) {
           targetRole = UserRole.finance;
           displayName = 'Finance Officer';
-        } else if (emailLower.contains('auditor') || emailLower.contains('observer')) {
+        } else if (claims['auditor'] == true ||
+            emailLower.contains('auditor') ||
+            emailLower.contains('observer')) {
           targetRole = UserRole.auditor;
           displayName = 'Observer / Auditor';
+        } else if (claims['admin'] == true) {
+          targetRole = UserRole.admin;
+          displayName = 'Admin User';
         }
 
         state = state.copyWith(
@@ -273,27 +260,18 @@ class AuthNotifier extends Notifier<AuthState> {
         await prefs.setString('userId', userCredential.user?.uid ?? 'admin-user');
         await prefs.setString('userName', displayName);
       } on FirebaseAuthException catch (e) {
-        // If credentials are standard admin credentials, fall back gracefully to Admin session
-        if (isAdminKeyword || isDefaultAdminPass) {
-          await loginAsDemoRole(UserRole.admin);
-          return;
-        }
         state = state.copyWith(
           isLoading: false,
           error: e.message ?? 'Authentication failed',
         );
       } catch (e) {
-        if (isAdminKeyword || isDefaultAdminPass) {
-          await loginAsDemoRole(UserRole.admin);
-          return;
-        }
         state = state.copyWith(
           isLoading: false,
           error: e.toString(),
         );
       }
     } else {
-      // Invigilator Login: Verify against invigilators collection in Firestore
+      // Invigilator Login: Verify server-side via auth-api & sign in with Firebase Custom Token
       if (Firebase.apps.isEmpty) {
         state = state.copyWith(
           isLoading: false,
@@ -303,83 +281,41 @@ class AuthNotifier extends Notifier<AuthState> {
       }
 
       try {
-        final querySnapshot = await FirebaseFirestore.instance
-            .collection('invigilators')
-            .where('mobile', isEqualTo: cleanMobile)
-            .get();
+        final result = await AuthApiService.loginInvigilator(
+          identifier: cleanMobile,
+          password: cleanPassword,
+        );
 
-        DocumentSnapshot<Map<String, dynamic>>? matchedDoc;
-        for (final doc in querySnapshot.docs) {
-          final data = doc.data();
-          final customPassword = data['password']?.toString().trim();
-          final resourceId = data['resourceId']?.toString().trim();
+        final customToken = result['customToken'] as String?;
+        final userId = result['userId'] as String?;
+        final userName = (result['userName'] as String?) ?? 'Invigilator';
 
-          // 1. If staff set a custom password, verify against it
-          if (customPassword != null && customPassword.isNotEmpty) {
-            if (customPassword == cleanPassword) {
-              matchedDoc = doc;
-              break;
-            }
-          }
-          // 2. If no custom password set yet (or user uses resourceId), verify against admin-assigned resourceId
-          if (resourceId != null && resourceId.isNotEmpty) {
-            if (resourceId == cleanPassword) {
-              matchedDoc = doc;
-              break;
-            }
-          }
-        }
-
-        // Fallback: check if staff entered their Resource ID in the mobile/identifier field
-        if (matchedDoc == null) {
-          final byResource = await FirebaseFirestore.instance
-              .collection('invigilators')
-              .where('resourceId', isEqualTo: cleanMobile)
-              .get();
-          for (final doc in byResource.docs) {
-            final data = doc.data();
-            final customPassword = data['password']?.toString().trim();
-            final resourceId = data['resourceId']?.toString().trim();
-            if (customPassword != null && customPassword.isNotEmpty) {
-              if (customPassword == cleanPassword) {
-                matchedDoc = doc;
-                break;
-              }
-            }
-            if (resourceId != null && resourceId.isNotEmpty) {
-              if (resourceId == cleanPassword) {
-                matchedDoc = doc;
-                break;
-              }
-            }
-          }
-        }
-
-        if (matchedDoc != null) {
-          final doc = matchedDoc;
-          final name = doc.data()?['name'] ?? 'Invigilator';
+        if (customToken == null || customToken.isEmpty || userId == null || userId.isEmpty) {
           state = state.copyWith(
             isLoading: false,
-            role: UserRole.invigilator,
-            userId: doc.id,
-            userName: name,
+            error: 'Authentication failed. Please try again.',
           );
-
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('role', 'invigilator');
-          await prefs.setString('userId', doc.id);
-          await prefs.setString('userName', name);
-        } else {
-          // Check if user accidentally entered admin in invigilator box
-          if (isAdminKeyword && isDefaultAdminPass) {
-            await loginAsDemoRole(UserRole.admin);
-            return;
-          }
-          state = state.copyWith(
-            isLoading: false,
-            error: 'Invalid Mobile Number or Password. If you are an Admin, switch to the Administrator tab.',
-          );
+          return;
         }
+
+        await FirebaseAuth.instance.signInWithCustomToken(customToken);
+
+        state = state.copyWith(
+          isLoading: false,
+          role: UserRole.invigilator,
+          userId: userId,
+          userName: userName,
+        );
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('role', 'invigilator');
+        await prefs.setString('userId', userId);
+        await prefs.setString('userName', userName);
+      } on AuthApiException catch (e) {
+        state = state.copyWith(
+          isLoading: false,
+          error: e.message,
+        );
       } catch (e) {
         state = state.copyWith(
           isLoading: false,
@@ -394,7 +330,9 @@ class AuthNotifier extends Notifier<AuthState> {
     if (Firebase.apps.isNotEmpty) {
       try {
         await FirebaseAuth.instance.signOut();
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('Firebase signOut error: $e');
+      }
     }
     
     final prefs = await SharedPreferences.getInstance();

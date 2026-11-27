@@ -21,11 +21,11 @@ service cloud.firestore {
     // EXISTING DUTYDESK COLLECTIONS (Explicitly matched; no catch-all)
     // =========================================================================
 
-    // Invigilators Collection (Auth via Mobile + Resource ID in app)
+    // Invigilators Collection (Auth via Firebase Custom Token issued by auth-api)
     match /invigilators/{invigilatorId} {
-      allow read: if true;
-      allow create, update: if true;
-      allow delete: if isSignedIn();
+      allow read: if isSignedIn();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (isSignedIn() && request.auth.uid == ('inv_' + invigilatorId));
     }
 
     // Users Collection
@@ -65,7 +65,8 @@ service cloud.firestore {
     }
 
     match /settings/{settingId} {
-      allow read, write: if true;
+      allow read: if settingId != 'admin_credentials' && isSignedIn();
+      allow write: if settingId != 'admin_credentials' && isAdmin();
     }
 
     match /audit_trail/{eventId} {
@@ -89,7 +90,7 @@ service cloud.firestore {
     }
 
     match /password_reset_otps/{docId} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
 
     // =========================================================================

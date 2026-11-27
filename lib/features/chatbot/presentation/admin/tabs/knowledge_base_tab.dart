@@ -347,7 +347,7 @@ class _KnowledgeBaseTabState extends ConsumerState<KnowledgeBaseTab> {
               ? const Center(child: Text('No chunks generated yet.'))
               : ListView.separated(
                   itemCount: chunks.length,
-                  separatorBuilder: (_, __) => const Divider(),
+                  separatorBuilder: (_, _) => const Divider(),
                   itemBuilder: (_, i) => ListTile(
                     title: Text('Chunk #${chunks[i].index + 1}',
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
